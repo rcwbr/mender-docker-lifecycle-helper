@@ -1,0 +1,31 @@
+{
+  "containerEnv": {
+    "DEVCONTAINER_HOST_WORKSPACE_MOUNT": "/var/lib/docker/codespacemount/workspace/mender-docker-lifecycle-helper"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "hashicorp.hcl",
+        "ms-azuretools.vscode-docker",
+        "bierner.markdown-mermaid",
+        "joshbolduc.commitlint"
+      ]
+    }
+  },
+  "hostRequirements": {
+    "cpus": 2,
+    "memory": "8gb",
+    "storage": "32gb"
+  },
+  "image": "mender-docker-lifecycle-helper-devcontainer",
+  "initializeCommand": ".devcontainer/initialize",
+  "mounts": [
+    {
+      "source": "/var/run/docker.sock",
+      "target": "/var/run/docker.sock",
+      "type": "bind"
+    }
+  ],
+  "name": "mender-docker-lifecycle-helper",
+  "onCreateCommand": "/opt/devcontainers/on_create_command"
+}
