@@ -1,0 +1,28 @@
+name: Push workflow
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '*'
+  pull_request:
+jobs:
+  devcontainer-cache-build:
+    uses: rcwbr/devcontainer-cache-build/.github/workflows/devcontainer-cache-build.yaml@0.6.0
+    permissions:
+      packages: write
+  release-it-workflow:
+    uses: rcwbr/release-it-gh-workflow/.github/workflows/release-it-workflow.yaml@0.2.4
+    with:
+      app-id: 1828679 # mender-docker-lifecycle-helper release-it app
+      app-environment: Repo release
+      # Use the file bumper release-it image
+      release-it-image: ghcr.io/rcwbr/release-it-docker-file-bumper:0.7.0
+    secrets:
+      app-secret: ${{ secrets.RELEASE_IT_GITHUB_APP_KEY }} # Secret belonging to the Repo release environment
+  pre-commit:
+    if: github.event_name == 'pull_request'
+    uses: rcwbr/dockerfile-partials/.github/workflows/pre-commit.yaml@0.4.0
+    needs: devcontainer-cache-build
+    with:
+      pre-commit-image: ${{ fromJSON(needs.devcontainer-cache-build.outputs.devcontainer-cache-image-all_configs).target.pre-commit.args.DEVCONTAINER_PRE_COMMIT_IMAGE }}
