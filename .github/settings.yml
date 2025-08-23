@@ -1,0 +1,78 @@
+repository:
+  name: mender-docker-lifecycle-helper
+  description: Helper to manage creation and upload of Mender applications
+  default_branch: main
+
+  # Prevent strategies other than basic merge, as they interfere with conventional changelog version inference
+  allow_squash_merge: false
+  allow_rebase_merge: false
+  # Instead, merge by merge commit
+  allow_merge_commit: true
+  # Clean up branches when PRs merge
+  delete_branch_on_merge: true
+
+rulesets:
+  - name: Tags rules
+    target: tag
+    enforcement: active
+    conditions:
+      ref_name:
+        include:
+          - "~ALL"
+        exclude: []
+    bypass_actors:
+      - actor_id: 1828679 # mender-docker-lifecycle-helper release-it app
+        actor_type: Integration
+        bypass_mode: always
+    rules:
+      - type: creation
+      - type: deletion
+      - type: non_fast_forward
+      - type: update
+  - name: Default branch rules
+    target: branch
+    enforcement: active
+    conditions:
+      ref_name:
+        include:
+          - "~DEFAULT_BRANCH"
+        exclude: []
+    bypass_actors:
+      - actor_id: 5 # Based on https://registry.terraform.io/providers/integrations/github/latest/docs/resources/organization_ruleset#bypass_actors
+        actor_type: RepositoryRole
+        bypass_mode: pull_request
+      - actor_id: 1828679 # mender-docker-lifecycle-helper release-it app
+        actor_type: Integration
+        bypass_mode: always
+    rules:
+      - type: creation
+      - type: deletion
+      - type: non_fast_forward
+      - type: pull_request
+        parameters:
+          dismiss_stale_reviews_on_push: true
+          require_code_owner_review: true
+          require_last_push_approval: false
+          # Use codeowners vs. review count, so codeowners can merge without review
+          required_approving_review_count: 0
+          required_review_thread_resolution: true
+      # Require workflow job as check to enable PR up-to-date rule
+      - type: required_status_checks
+        parameters:
+          required_status_checks:
+            - context: devcontainer-cache-build / Populate devcontainer image cache
+              integration_id: 15368 # GitHub Actions integration ID
+            - context: pre-commit / pre-commit
+              integration_id: 15368 # GitHub Actions integration ID
+            - context: release-it-workflow / Release-it dry-run
+              integration_id: 15368 # GitHub Actions integration ID
+          # Requires PR branches to be up-to-date with target
+          strict_required_status_checks_policy: true
+
+collaborators: [] # No collaborators defined
+
+environments:
+  - name: Repo release # Must match the app-environment workflow input
+    deployment_branch_policy:
+      custom_branches:
+        - main
