@@ -1,0 +1,14 @@
+#!/bin/bash
+
+DEFAULT_MAC_ADDRESS="$(cat /sys/class/net/eth0/address)"
+MAC_ADDRESS="${MAC_ADDRESS:-${DEFAULT_MAC_ADDRESS}}"
+export MAC_ADDRESS
+
+docker run \
+  --rm \
+  --name mender-client-docker-launcher \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e MENDER_PAT \
+  -e MAC_ADDRESS \
+  -e DEVICE_TYPE=virtual \
+  ghcr.io/rcwbr/mender-client-docker-launcher:0.4.2

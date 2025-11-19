@@ -1,0 +1,13 @@
+#!/bin/bash
+
+set -e
+
+MDLH_ARGS="\
+  --device-type virtual \
+  --platform linux/amd64 \
+  --device-group mender-docker-lifecycle-helper-example \
+  $(pwd)/examples/$*/docker-compose.yaml \
+"
+export MDLH_ARGS
+
+bash "$( dirname -- "$( dirname -- "${BASH_SOURCE[0]}" )")/mender-docker-lifecycle-helper-launcher"
