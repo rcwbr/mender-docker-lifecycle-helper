@@ -7,6 +7,46 @@ on:
       - '*'
   pull_request:
 jobs:
+  build-docker-images:
+    name: Build Docker images
+    runs-on: ubuntu-24.04
+    permissions:
+      packages: write
+    env:
+      SOURCE_DATE_EPOCH: 1731797200
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5.0.0
+      -
+        # TODO remove after more satisfactory options exist to use latest Docker
+        # version while avoiding this issue: https://github.com/docker/buildx/issues/59
+        name: Set up Docker
+        uses: docker/setup-docker-action@v4
+        with:
+          version: 27.3.1
+      - name: GHCR Login
+        uses: docker/login-action@v3.3.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      -
+        name: Docker Buildx builder setup
+        uses: docker/setup-buildx-action@v3.11.1
+        with:
+          version: v0.19.1
+      -
+        id: docker-bake-mender-docker-lifecycle-helper
+        name: Docker Bake mender-docker-lifecycle-helper
+        uses: docker/bake-action@v5.7.0
+        with:
+          source: https://github.com/rcwbr/dockerfile-partials.git#0.12.1
+          files: github-cache-bake.hcl, uv-project/docker-bake.hcl, cwd://docker-bake.hcl
+        env:
+          REGISTRY: ghcr.io/rcwbr/
+          IMAGE_NAME: mender-docker-lifecycle-helper
+    outputs:
+      mender-docker-lifecycle-helper: ${{ steps.docker-bake-mender-docker-lifecycle-helper.outputs.metadata }}
   devcontainer-cache-build:
     uses: rcwbr/devcontainer-cache-build/.github/workflows/devcontainer-cache-build.yaml@0.9.2
     permissions:

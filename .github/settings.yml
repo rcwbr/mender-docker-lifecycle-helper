@@ -60,6 +60,8 @@ rulesets:
       - type: required_status_checks
         parameters:
           required_status_checks:
+            - context: Build Docker images
+              integration_id: 15368 # GitHub Actions integration ID
             - context: devcontainer-cache-build / Populate devcontainer image cache
               integration_id: 15368 # GitHub Actions integration ID
             - context: pre-commit / pre-commit
