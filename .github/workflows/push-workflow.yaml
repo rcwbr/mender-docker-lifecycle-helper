@@ -124,3 +124,15 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           report_type: test_results
           files: junit.xml
+  mender-docker-lifecycle-helper:
+    needs: build-docker-images
+    uses: ./.github/workflows/mender-docker-lifecycle-helper.yaml
+    with:
+      device-group: mender-docker-lifecycle-helper-example
+      device-type: virtual
+      manifest-file: ./examples/ci/docker-compose.yaml
+      platform: linux/amd64
+      helper-image: ${{ fromJSON(needs.build-docker-images.outputs.mender-docker-lifecycle-helper).uv-project['image.name'] }}
+      service-images: ${{ github.ref_type == 'tag' && '' || format('["mdlh={0}"]', fromJSON(needs.build-docker-images.outputs.mender-docker-lifecycle-helper).uv-project['image.name']) }}
+    secrets:
+      mender-pat-secret: ${{ secrets.MENDER_PAT }}
