@@ -100,3 +100,27 @@ jobs:
     needs: devcontainer-cache-build
     with:
       pre-commit-image: ${{ fromJSON(needs.devcontainer-cache-build.outputs.devcontainer-cache-image-all_configs).target.pre-commit.args.DEVCONTAINER_PRE_COMMIT_IMAGE }}
+  pytest:
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'pull_request'
+    needs: devcontainer-cache-build
+    container:
+      image: ${{ needs.devcontainer-cache-build.outputs.devcontainer-cache-image-ref }}
+      options: --user root
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.1.7
+      - name: pytest-cov
+        run: |
+          pip install -e .
+          pytest --cov=src --cov-branch --cov-report=xml --junitxml=junit.xml
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5.5.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5.5.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          report_type: test_results
+          files: junit.xml

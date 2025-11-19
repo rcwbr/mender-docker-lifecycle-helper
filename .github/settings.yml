@@ -70,6 +70,12 @@ rulesets:
               integration_id: 15368 # GitHub Actions integration ID
             - context: Dive Docker image space efficiency analysis
               integration_id: 15368 # GitHub Actions integration ID
+            - context: pytest
+              integration_id: 15368 # GitHub Actions integration ID
+            - context: codecov/patch/no-drop
+              integration_id: 254 # Codecov integration ID
+            - context: codecov/patch/minimum
+              integration_id: 254 # Codecov integration ID
           # Requires PR branches to be up-to-date with target
           strict_required_status_checks_policy: true
 
