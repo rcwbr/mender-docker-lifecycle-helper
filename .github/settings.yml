@@ -68,6 +68,8 @@ rulesets:
               integration_id: 15368 # GitHub Actions integration ID
             - context: release-it-workflow / Release-it dry-run
               integration_id: 15368 # GitHub Actions integration ID
+            - context: Dive Docker image space efficiency analysis
+              integration_id: 15368 # GitHub Actions integration ID
           # Requires PR branches to be up-to-date with target
           strict_required_status_checks_policy: true
 
