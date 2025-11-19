@@ -1,0 +1,6 @@
+__pycache__
+build
+.coverage
+coverage.xml
+**/*egg-info
+mender-docker-lifecycle-helper-nginx*
