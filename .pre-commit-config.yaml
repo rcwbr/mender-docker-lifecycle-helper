@@ -41,6 +41,7 @@ repos:
   - id: check-yaml
   - id: detect-private-key
   - id: double-quote-string-fixer
+    exclude: './.*\.py$'
   - id: end-of-file-fixer
     exclude: '.github/ISSUE_TEMPLATE/.*\.md$'
   - id: forbid-submodules
@@ -50,6 +51,7 @@ repos:
   - id: sort-simple-yaml
     files: .pre-commit-config.yaml
   - id: trailing-whitespace
+    exclude: 'README.md'
 - repo: local
   hooks:
   - id: hclfmt

@@ -7,17 +7,96 @@ on:
       - '*'
   pull_request:
 jobs:
-  devcontainer-cache-build:
-    uses: rcwbr/devcontainer-cache-build/.github/workflows/devcontainer-cache-build.yaml@0.6.0
+  build-docker-images:
+    name: Build Docker images
+    runs-on: ubuntu-24.04
     permissions:
       packages: write
+    env:
+      SOURCE_DATE_EPOCH: 1731797200
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5.0.0
+      -
+        # TODO remove after more satisfactory options exist to use latest Docker
+        # version while avoiding this issue: https://github.com/docker/buildx/issues/59
+        name: Set up Docker
+        uses: docker/setup-docker-action@v4
+        with:
+          version: 27.3.1
+      - name: GHCR Login
+        uses: docker/login-action@v3.3.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      -
+        name: Docker Buildx builder setup
+        uses: docker/setup-buildx-action@v3.11.1
+        with:
+          version: v0.19.1
+      -
+        id: docker-bake-mender-docker-lifecycle-helper
+        name: Docker Bake mender-docker-lifecycle-helper
+        uses: docker/bake-action@v5.7.0
+        with:
+          source: https://github.com/rcwbr/dockerfile-partials.git#0.12.1
+          files: github-cache-bake.hcl, uv-project/docker-bake.hcl, cwd://docker-bake.hcl
+        env:
+          REGISTRY: ghcr.io/rcwbr/
+          IMAGE_NAME: mender-docker-lifecycle-helper
+    outputs:
+      mender-docker-lifecycle-helper: ${{ steps.docker-bake-mender-docker-lifecycle-helper.outputs.metadata }}
+  devcontainer-cache-build:
+    uses: rcwbr/devcontainer-cache-build/.github/workflows/devcontainer-cache-build.yaml@0.9.2
+    permissions:
+      packages: write
+  dive-efficiency:
+    name: Dive Docker image space efficiency analysis
+    needs: build-docker-images
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5.0.0
+      - name: GHCR Login
+        uses: docker/login-action@v3.3.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Dive JSON
+        run: |
+          docker run \
+            --rm \
+            -e CI=true \
+            -v $(pwd)/.dive-ci:/etc/.dive-ci \
+            -v $(pwd)/out:/out \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            wagoodman/dive:v0.13.1 \
+            --ci-config /etc/.dive-ci \
+            ${{ format(
+              '{0}{1}',
+              (github.ref_name == github.event.repository.default_branch && '--json /out/dive.json ' || ''),
+              fromJSON(needs.build-docker-images.outputs.mender-docker-lifecycle-helper).uv-project['image.name']
+            ) }}
+      - name: Upload Dive result
+        if: github.ref_name == github.event.repository.default_branch
+        uses: actions/upload-artifact@v5.0.0
+        with:
+          name: dive_results
+          path: out/dive.json
   release-it-workflow:
-    uses: rcwbr/release-it-gh-workflow/.github/workflows/release-it-workflow.yaml@0.2.4
+    needs: dive-efficiency
+    uses: rcwbr/release-it-gh-workflow/.github/workflows/release-it-workflow.yaml@0.3.0
     with:
       app-id: 1828679 # mender-docker-lifecycle-helper release-it app
       app-environment: Repo release
+      # Download dive artifact for assets
+      artifact-name: ${{ github.ref_name == github.event.repository.default_branch && 'dive_results' || '' }}
       # Use the file bumper release-it image
       release-it-image: ghcr.io/rcwbr/release-it-docker-file-bumper:0.7.0
+      # Use custom release-it config
+      release-it-config: .release-it.json
     secrets:
       app-secret: ${{ secrets.RELEASE_IT_GITHUB_APP_KEY }} # Secret belonging to the Repo release environment
   pre-commit:
@@ -26,3 +105,39 @@ jobs:
     needs: devcontainer-cache-build
     with:
       pre-commit-image: ${{ fromJSON(needs.devcontainer-cache-build.outputs.devcontainer-cache-image-all_configs).target.pre-commit.args.DEVCONTAINER_PRE_COMMIT_IMAGE }}
+  pytest:
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'pull_request'
+    needs: devcontainer-cache-build
+    container:
+      image: ${{ needs.devcontainer-cache-build.outputs.devcontainer-cache-image-ref }}
+      options: --user root
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.1.7
+      - name: pytest-cov
+        run: |
+          pip install -e .
+          pytest --cov=src --cov-branch --cov-report=xml --junitxml=junit.xml
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5.5.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5.5.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          report_type: test_results
+          files: junit.xml
+  mender-docker-lifecycle-helper:
+    needs: build-docker-images
+    uses: ./.github/workflows/mender-docker-lifecycle-helper.yaml
+    with:
+      device-group: mender-docker-lifecycle-helper-example
+      device-type: virtual
+      manifest-file: ./examples/ci/docker-compose.yaml
+      platform: linux/amd64
+      helper-image: ${{ fromJSON(needs.build-docker-images.outputs.mender-docker-lifecycle-helper).uv-project['image.name'] }}
+      service-images: ${{ github.ref_type == 'tag' && '' || format('["mdlh={0}"]', fromJSON(needs.build-docker-images.outputs.mender-docker-lifecycle-helper).uv-project['image.name']) }}
+    secrets:
+      mender-pat-secret: ${{ secrets.MENDER_PAT }}

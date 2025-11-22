@@ -1,6 +1,7 @@
 {
   "containerEnv": {
-    "DEVCONTAINER_HOST_WORKSPACE_MOUNT": "/var/lib/docker/codespacemount/workspace/mender-docker-lifecycle-helper"
+    "DEVCONTAINER_HOST_WORKSPACE_MOUNT": "/var/lib/docker/codespacemount/workspace/mender-docker-lifecycle-helper",
+    "DEVCONTAINER_WORKSPACE_PATH": "${containerWorkspaceFolder}"
   },
   "customizations": {
     "vscode": {
@@ -8,7 +9,9 @@
         "hashicorp.hcl",
         "ms-azuretools.vscode-docker",
         "bierner.markdown-mermaid",
-        "joshbolduc.commitlint"
+        "joshbolduc.commitlint",
+        "ms-python.python",
+        "ryanluker.vscode-coverage-gutters"
       ]
     }
   },

@@ -1,0 +1,15 @@
+coverage:
+  range: 75...95
+  status:
+    project:
+      minimum:
+        target: 90%
+      no-drop:
+        target: auto
+        threshold: 1%
+    patch:
+      minimum:
+        target: 90%
+      no-drop:
+        target: auto
+        threshold: 1%

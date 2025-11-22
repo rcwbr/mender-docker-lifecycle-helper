@@ -1,0 +1,10 @@
+#!/bin/bash
+
+docker buildx create --use --driver docker-container
+REGISTRY=ghcr.io/rcwbr \
+IMAGE_NAME=mender-docker-lifecycle-helper \
+  docker buildx bake \
+    -f github-cache-bake.hcl \
+    -f uv-project/docker-bake.hcl \
+    -f cwd://docker-bake.hcl \
+    https://github.com/rcwbr/dockerfile_partials.git#0.12.1

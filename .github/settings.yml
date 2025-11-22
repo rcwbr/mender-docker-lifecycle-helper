@@ -60,11 +60,23 @@ rulesets:
       - type: required_status_checks
         parameters:
           required_status_checks:
+            - context: Build Docker images
+              integration_id: 15368 # GitHub Actions integration ID
             - context: devcontainer-cache-build / Populate devcontainer image cache
               integration_id: 15368 # GitHub Actions integration ID
             - context: pre-commit / pre-commit
               integration_id: 15368 # GitHub Actions integration ID
             - context: release-it-workflow / Release-it dry-run
+              integration_id: 15368 # GitHub Actions integration ID
+            - context: Dive Docker image space efficiency analysis
+              integration_id: 15368 # GitHub Actions integration ID
+            - context: pytest
+              integration_id: 15368 # GitHub Actions integration ID
+            - context: codecov/patch/no-drop
+              integration_id: 254 # Codecov integration ID
+            - context: codecov/patch/minimum
+              integration_id: 254 # Codecov integration ID
+            - context: mender-docker-lifecycle-helper / mender-docker-lifecycle-helper
               integration_id: 15368 # GitHub Actions integration ID
           # Requires PR branches to be up-to-date with target
           strict_required_status_checks_policy: true

@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mender-docker-lifecycle-helper"
+version = "0.1.1"
+description = "Helper for managing Mender Docker lifecycle."
+authors = [
+    { name = "rcwbr" }
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "gitdb==4.0.12",
+    "GitPython==3.1.45",
+    "PyYAML==6.0.2",
+    "requests==2.32.4",
+    "smmap==5.0.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest-cov>=7.0.0"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.scripts]
+mender-docker-lifecycle-helper = "mender_docker_lifecycle_helper.mender_docker_lifecycle_helper:main"
