@@ -87,7 +87,7 @@ jobs:
           path: out/dive.json
   release-it-workflow:
     needs: dive-efficiency
-    uses: rcwbr/release-it-gh-workflow/.github/workflows/release-it-workflow.yaml@0.3.0
+    uses: rcwbr/release-it-gh-workflow/.github/workflows/release-it-workflow.yaml@0.4.0
     with:
       app-id: 1828679 # mender-docker-lifecycle-helper release-it app
       app-environment: Repo release
