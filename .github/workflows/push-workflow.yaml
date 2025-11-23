@@ -94,7 +94,7 @@ jobs:
       # Download dive artifact for assets
       artifact-name: ${{ github.ref_name == github.event.repository.default_branch && 'dive_results' || '' }}
       # Use the file bumper release-it image
-      release-it-image: ghcr.io/rcwbr/release-it-docker-file-bumper:0.7.0
+      release-it-image: ghcr.io/rcwbr/release-it-docker-file-bumper:0.8.1
       # Use custom release-it config
       release-it-config: .release-it.json
     secrets:

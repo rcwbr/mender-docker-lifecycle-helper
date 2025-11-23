@@ -1,20 +1,9 @@
 {
-  "git": {
-    "commit": true,
-    "commitMessage": "release: ${version}",
-    "tag": true,
-    "tagName": "${version}"
-  },
-  "github": {
-    "assets": "dive.json",
-    "release": true
-  },
+  "extends": [
+    "github:rcwbr/release-it-docker/file-bumper#54-install-docker-cli-in-images-to-support-custom-hooks"
+  ],
   "plugins": {
     "@release-it/bumper": {
-      "in": {
-        "file": "VERSION",
-        "type": "text/plain"
-      },
       "out": [
         {
           "file": ".github/workflows/mender-docker-lifecycle-helper.yaml",
@@ -27,67 +16,8 @@
         {
           "file": "mender-docker-lifecycle-helper-launcher",
           "type": "text/plain"
-        },
-        {
-          "file": "pyproject.toml",
-          "type": "text/plain"
-        },
-        {
-          "file": "README.md",
-          "type": "text/plain"
-        },
-        {
-          "file": "VERSION",
-          "type": "text/plain"
         }
       ]
-    },
-    "@release-it/conventional-changelog": {
-      "preset": {
-        "name": "conventionalcommits",
-        "types": [
-          {
-            "section": ":rocket: Features",
-            "type": "feat"
-          },
-          {
-            "section": ":bug: Bug fixes",
-            "type": "fix"
-          },
-          {
-            "section": ":package: Build",
-            "type": "build"
-          },
-          {
-            "section": ":robot: CI/CD",
-            "type": "ci"
-          },
-          {
-            "section": ":page_facing_up: Docs",
-            "type": "docs"
-          },
-          {
-            "section": ":checkered_flag: Performance",
-            "type": "perf"
-          },
-          {
-            "section": ":twisted_rightwards_arrows: Refactor",
-            "type": "refactor"
-          },
-          {
-            "section": ":broom: Style",
-            "type": "style"
-          },
-          {
-            "section": ":test_tube: Tests",
-            "type": "test"
-          },
-          {
-            "hidden": true,
-            "type": "chore"
-          }
-        ]
-      }
     }
   }
 }
