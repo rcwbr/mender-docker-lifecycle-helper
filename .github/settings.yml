@@ -76,7 +76,7 @@ rulesets:
               integration_id: 254 # Codecov integration ID
             - context: codecov/patch/minimum
               integration_id: 254 # Codecov integration ID
-            - context: mender-docker-lifecycle-helper / mender-docker-lifecycle-helper
+            - context: mender-docker-lifecycle-helper / Mender Docker Lifecycle Helper - delta
               integration_id: 15368 # GitHub Actions integration ID
           # Requires PR branches to be up-to-date with target
           strict_required_status_checks_policy: true
