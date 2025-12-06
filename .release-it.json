@@ -4,7 +4,7 @@
   ],
   "hooks": {
     "after:bump": [
-      "docker run --rm -v ${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE} -w ${GITHUB_WORKSPACE} ghcr.io/astral-sh/uv:0.9.11-python3.12-trixie-slim uv version ${version}"
+      "docker run --rm -v $(pwd):$(pwd) -w $(pwd) ghcr.io/astral-sh/uv:0.9.11-python3.12-trixie-slim uv version ${version}"
     ]
   },
   "plugins": {
