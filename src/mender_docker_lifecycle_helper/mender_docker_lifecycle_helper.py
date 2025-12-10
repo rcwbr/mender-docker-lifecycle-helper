@@ -463,7 +463,7 @@ class MenderDockerLifecycleHelper:
 
         logger.debug(f"Creating artifact file: {self.artifact_file}")
         metadata = {
-            "application-name": self.manifest_name,
+            "application_name": self.manifest_name,
             "orchestrator": "docker-compose",
             "platform": self.args.platform,
             "version": self.version,
