@@ -1,6 +1,6 @@
 services:
   mdlh:
-    image: ghcr.io/rcwbr/mender-docker-lifecycle-helper:0.3.1
+    image: ghcr.io/rcwbr/mender-docker-lifecycle-helper:0.3.2
     entrypoint:
       - /bin/bash
     command:
