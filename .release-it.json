@@ -2,6 +2,10 @@
   "extends": [
     "github:rcwbr/release-it-docker/file-bumper#0.8.0"
   ],
+  "github": {
+    "assets": "dive.json",
+    "release": true
+  },
   "hooks": {
     "after:bump": [
       "docker run --rm -v $(pwd):$(pwd) -w $(pwd) ghcr.io/astral-sh/uv:0.9.11-python3.12-trixie-slim uv version ${version}"
