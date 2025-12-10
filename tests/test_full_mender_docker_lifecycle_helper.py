@@ -192,7 +192,7 @@ def test_basic(app_repo):
         ],
         (
             "{"
-            f'"application-name": "{repo_dir.name}-application", '
+            f'"application_name": "{repo_dir.name}-application", '
             '"orchestrator": "docker-compose", '
             '"platform": "linux/amd64", '
             f'"version": "0.1.0+{app_repo.git.rev_parse('HEAD', short=7)}+{FAKE_UUID}", '
@@ -302,7 +302,7 @@ def test_subsequent_executions(app_repo):
         ],
         (
             "{"
-            f'"application-name": "{repo_dir.name}-application", '
+            f'"application_name": "{repo_dir.name}-application", '
             '"orchestrator": "docker-compose", '
             '"platform": "linux/amd64", '
             f'"version": "0.1.0+{app_repo.git.rev_parse('HEAD', short=7)}+{FAKE_UUID}", '
@@ -407,7 +407,7 @@ def test_subsequent_executions(app_repo):
         ],
         (
             "{"
-            f'"application-name": "{repo_dir.name}-application", '
+            f'"application_name": "{repo_dir.name}-application", '
             '"orchestrator": "docker-compose", '
             '"platform": "linux/amd64", '
             f'"version": "0.1.0+{app_repo.git.rev_parse('HEAD', short=7)}+{FAKE_UUID}", '
@@ -516,7 +516,7 @@ def test_manifest_only(app_repo):
         ],
         (
             "{"
-            f'"application-name": "{repo_dir.name}-application", '
+            f'"application_name": "{repo_dir.name}-application", '
             '"orchestrator": "docker-compose", '
             '"platform": "linux/amd64", '
             f'"version": "0.1.0+{app_repo.git.rev_parse('HEAD', short=7)}+{FAKE_UUID}", '
@@ -616,7 +616,7 @@ def test_release(app_repo):
         ],
         (
             "{"
-            f'"application-name": "{repo_dir.name}-application", '
+            f'"application_name": "{repo_dir.name}-application", '
             '"orchestrator": "docker-compose", '
             '"platform": "linux/amd64", '
             f'"version": "0.2.0", '
@@ -715,7 +715,7 @@ def test_no_delta(app_repo):
         ],
         (
             "{"
-            f'"application-name": "{repo_dir.name}-application", '
+            f'"application_name": "{repo_dir.name}-application", '
             '"orchestrator": "docker-compose", '
             '"platform": "linux/amd64", '
             f'"version": "0.1.0+{app_repo.git.rev_parse('HEAD', short=7)}+{FAKE_UUID}", '
@@ -819,7 +819,7 @@ def test_service_images(app_repo):
         ],
         (
             "{"
-            f'"application-name": "{repo_dir.name}-application", '
+            f'"application_name": "{repo_dir.name}-application", '
             '"orchestrator": "docker-compose", '
             '"platform": "linux/amd64", '
             f'"version": "0.1.0+{app_repo.git.rev_parse('HEAD', short=7)}+{FAKE_UUID}", '
@@ -929,7 +929,7 @@ def test_new_service(app_repo):
         ],
         (
             "{"
-            f'"application-name": "{repo_dir.name}-application", '
+            f'"application_name": "{repo_dir.name}-application", '
             '"orchestrator": "docker-compose", '
             '"platform": "linux/amd64", '
             f'"version": "0.1.0+{app_repo.git.rev_parse('HEAD', short=7)}+{FAKE_UUID}", '
@@ -1037,7 +1037,7 @@ def test_new_manifest(app_repo):
         ],
         (
             "{"
-            f'"application-name": "{repo_dir.name}-new", '
+            f'"application_name": "{repo_dir.name}-new", '
             '"orchestrator": "docker-compose", '
             '"platform": "linux/amd64", '
             f'"version": "0.1.0+{app_repo.git.rev_parse('HEAD', short=7)}+{FAKE_UUID}", '
