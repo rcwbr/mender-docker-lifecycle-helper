@@ -138,6 +138,6 @@ jobs:
       manifest-file: ./examples/ci/docker-compose.yaml
       platform: linux/amd64
       helper-image: ${{ fromJSON(needs.build-docker-images.outputs.mender-docker-lifecycle-helper).uv-project['image.name'] }}
-      service-images: ${{ github.ref_type == 'tag' && '' || format('["mdlh={0}"]', fromJSON(needs.build-docker-images.outputs.mender-docker-lifecycle-helper).uv-project['image.name']) }}
+      service-images: ${{ github.ref_type == 'tag' && '' || format('["mdlh {0}"]', fromJSON(needs.build-docker-images.outputs.mender-docker-lifecycle-helper).uv-project['image.name']) }}
     secrets:
       mender-pat-secret: ${{ secrets.MENDER_PAT }}

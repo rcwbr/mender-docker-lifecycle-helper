@@ -6,7 +6,8 @@ MDLH_ARGS="\
   --device-type virtual \
   --platform linux/amd64 \
   --device-group mender-docker-lifecycle-helper-example \
-  $(pwd)/examples/$*/docker-compose.yaml \
+  $(pwd)/examples/${1}/docker-compose.yaml \
+  ${*:2} \
 "
 export MDLH_ARGS
 

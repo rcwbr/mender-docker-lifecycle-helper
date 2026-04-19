@@ -15,6 +15,26 @@ RUN DEBIAN_FRONTEND=noninteractive \
     && rm -rf /var/cache/debconf \
     && rm -rf /var/lib/apt/lists/*
 
+RUN wget -q https://github.com/lework/skopeo-binary/releases/download/v1.22.0/skopeo-linux-amd64 -O /usr/bin/skopeo \
+    && chmod +x /usr/bin/skopeo
+
+    COPY <<EOF /etc/containers/policy.json
+{
+    "default": [
+        {
+            "type": "insecureAcceptAnything"
+        }
+    ],
+    "transports":
+        {
+            "docker-daemon":
+                {
+                    "": [{"type":"insecureAcceptAnything"}]
+                }
+        }
+}
+EOF
+
 RUN git config --system --add safe.directory "*"
 
 COPY <<EOF /opt/mender-docker-lifecycle-helper/entrypoint

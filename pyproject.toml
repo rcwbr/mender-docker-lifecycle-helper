@@ -12,6 +12,7 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "click==8.3.2",
     "gitdb==4.0.12",
     "GitPython==3.1.45",
     "PyYAML==6.0.2",
@@ -28,4 +29,4 @@ dev = [
 where = ["src"]
 
 [project.scripts]
-mender-docker-lifecycle-helper = "mender_docker_lifecycle_helper.mender_docker_lifecycle_helper:main"
+mender-docker-lifecycle-helper = "mender_docker_lifecycle_helper.cli:cli"
