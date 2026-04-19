@@ -1,14 +1,29 @@
 #!/bin/bash
 
+set -e
+
 DEFAULT_MAC_ADDRESS="$(cat /sys/class/net/eth0/address)"
 MAC_ADDRESS="${MAC_ADDRESS:-${DEFAULT_MAC_ADDRESS}}"
 export MAC_ADDRESS
 
 docker run \
   --rm \
+  -d \
+  --name dockerd \
+  -v $(pwd)/client-dind/var-run-docker:/var/run/docker \
+  -e DOCKER_HOST=unix:///var/run/docker/sock \
+  --privileged \
+  docker:29.3.1-dind
+
+sleep 3
+
+docker run \
+  --rm \
   --name mender-client-docker-launcher \
-  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v $(pwd)/client-dind/docker-compose.yaml:/opt/mender-client-docker/docker-compose.yaml \
+  -v $(pwd)/client-dind/var-run-docker:/var/run/docker \
+  -e DOCKER_HOST=unix:///var/run/docker/sock \
   -e MENDER_PAT \
   -e MAC_ADDRESS \
   -e DEVICE_TYPE=virtual \
-  ghcr.io/rcwbr/mender-client-docker-launcher:0.4.2
+  ghcr.io/rcwbr/mender-client-docker-launcher:0.5.1
