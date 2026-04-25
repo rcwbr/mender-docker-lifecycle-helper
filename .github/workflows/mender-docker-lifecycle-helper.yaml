@@ -74,7 +74,7 @@ jobs:
           mender-docker-lifecycle-helper \
             --platform ${{ inputs.platform }} \
             --device-type ${{ inputs.device-type }} \
-            ${{ matrix.delta && || '--no-delta' }} \
+            ${{ matrix.delta && '' || '--no-delta' }} \
             ${{ matrix.release && '--release' || '' }} \
             ${{ inputs.device-group && format('--device-group {0}', inputs.device-group) || '' }} \
             ${{ inputs.mender-host && format('--mender-host {0}', inputs.mender-host) || '' }} \
