@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mender-docker-lifecycle-helper"
-version = "0.3.2"
+version = "1.0.0"
 description = "Helper for managing Mender Docker lifecycle."
 authors = [
     { name = "rcwbr" }
