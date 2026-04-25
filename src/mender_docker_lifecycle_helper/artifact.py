@@ -319,7 +319,7 @@ class LifecycleHelperArtifact:
     @staticmethod
     def gen_artifact_services(
         context: LifecycleHelperContext,
-    ) -> dict[str : dict[str : dict[str:str]]]:
+    ) -> dict[str : dict[str : dict[str, str]]]:
         """
         Determine the services metadata for the current artifact, including reading the image hashes from remote images when required. To establish this list, any provided service-file image archives are extracted and read.
 
