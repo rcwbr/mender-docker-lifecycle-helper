@@ -23,8 +23,13 @@ on:
         description: Platform with which the artifact is compatible (e.g., linux/arm/v7).
         required: true
         type: string
+      service-files:
+        description: Image file overrides for services in the manifest_file, as a JSON array ["<service> <image file>", "<service> <image file>", ...].
+        default: ''
+        required: false
+        type: string
       service-images:
-        description: Image name overrides for services in the manifest_file, as a JSON array ["<service>=<image>", "<service>=<image>", ...].
+        description: Image name overrides for services in the manifest_file, as a JSON array ["<service> <image>", "<service> <image>", ...].
         default: ''
         required: false
         type: string
@@ -69,9 +74,10 @@ jobs:
           mender-docker-lifecycle-helper \
             --platform ${{ inputs.platform }} \
             --device-type ${{ inputs.device-type }} \
-            --delta ${{ matrix.delta }} \
+            ${{ matrix.delta && '--delta' || '' }} \
             ${{ matrix.release && '--release' || '' }} \
             ${{ inputs.device-group && format('--device-group {0}', inputs.device-group) || '' }} \
             ${{ inputs.mender-host && format('--mender-host {0}', inputs.mender-host) || '' }} \
             ${{ inputs.service-images && format('--service-image {0}', join(fromJSON(inputs.service-images), '--service-image')) || '' }} \
+            ${{ inputs.service-files && format('--service-file {0}', join(fromJSON(inputs.service-files), '--service-file')) || '' }} \
             ${{ inputs.manifest-file }}

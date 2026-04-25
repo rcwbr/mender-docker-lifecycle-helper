@@ -1,192 +1,144 @@
 # Inspired by the deep_delta function from app-gen:
 # https://github.com/mendersoftware/app-update-module/blob/29eb51169d1dc32ef1bd013e2414361f67195219/gen/app-gen#L377
 
-import os
-import logging
-import tarfile
-import shutil
-import hashlib
 import json
-import tempfile
+import logging
+import shutil
 import subprocess
+import tarfile
 
-logger = logging.getLogger(__name__)
-handler = logging.StreamHandler()
-formatter = logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s")
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+from pathlib import Path
+from typing import Optional
 
-# Helper function to parse parent-child relationships from image layer metadata
-# This reconstructs the layer tree structure for a given unpacked image directory
-# It builds a directory tree under 'parent-child' to represent the parent/child relationships
+from mender_docker_lifecycle_helper.utils.container_utils import HASH_PREFIX
+
+XDELTA_CMD = ["xdelta3", "-f", "-e", "-s"]
 
 
-def parse_parent_child(root_dir):
-    parent_child_dir = os.path.join(root_dir, "parent-child")
-    id2parent = {}
-    parent2id = {}
-    ids = []
-
-    # Walk through all files, looking for 'json' files that describe layers
-    for dirpath, _, filenames in os.walk(root_dir):
-        for filename in filenames:
-            if filename == "json":
-                json_path = os.path.join(dirpath, filename)
-                with open(json_path) as f:
-                    data = json.load(f)
-                parentid = data.get("parent")
-                id = os.path.basename(os.path.dirname(json_path))
-                id2parent[id] = parentid
-                parent2id[parentid] = id
-                if parentid != "null":
-                    ids.append(id)
-
-    # Find the root layer (parentid == 'null') and create its directory
-    parentid = parent2id.get("null")
-    if parentid:
-        os.makedirs(os.path.join(parent_child_dir, parentid), exist_ok=True)
-    i = 0
-    # Build the parent-child directory tree
-    while ids:
-        id = ids[i]
-        parentid = id2parent.get(id)
-        if not parentid:
-            break
-        parentid_found = False
-        # Find parent dir in the tree
-        for dirpath, dirnames, _ in os.walk(parent_child_dir):
-            if parentid in dirnames:
-                parent_dir = os.path.join(dirpath, parentid)
-                os.makedirs(os.path.join(parent_dir, id), exist_ok=True)
-                ids.remove(id)
-                i = 0
-                parentid_found = True
-                break
-        if not parentid_found:
-            i += 1
-            if i >= len(ids):
-                i = 0
+class ImageDeltaException(Exception):
+    pass
 
 
-def calc_image_layer_hashes(directory):
-    id2sum = {}
-    sum2path = {}
+def _read_layers_from_manifest(
+    image_dir: Path, logger: Optional[logging.Logger] = logging.getLogger(__name__)
+) -> list[Path]:
+    """
+    Reads the layers from an OCI image manifest file.
 
-    # Find all layer.tar files and calculate their sha256 hashes for the directory image
-    for dirpath, _, filenames in os.walk(directory):
-        for filename in filenames:
-            if filename == "layer.tar":
-                layer_path = os.path.join(dirpath, filename)
-                with open(layer_path, "rb") as f:
-                    sum = hashlib.sha256(f.read()).hexdigest()
-                id = os.path.basename(os.path.dirname(layer_path))
-                id2sum[id] = sum
-                sum2path[sum] = layer_path
-    return id2sum, sum2path
+    :param image_dir: The directory in which the image is extracted.
+    :param logger: A logger with which to log steps of function processes.
+
+    :returns: The list of paths to the layers referenced by the image manifest.
+    """
+    blobs_dir = image_dir / "blobs" / HASH_PREFIX
+
+    index = {}
+    index_filename = image_dir / "index.json"
+    logger.debug(f"Reading the image index file {index_filename}.")
+    with open(index_filename, "r") as index_file:
+        index = json.load(index_file)
+
+    manifest_hash = index["manifests"][0]["digest"].removeprefix(f"{HASH_PREFIX}:")
+    manifest = {}
+    manifest_filename = blobs_dir / manifest_hash
+    logger.debug(f"Reading manifest file {manifest_filename}.")
+    with open(blobs_dir / manifest_hash) as manifest_file:
+        manifest = json.load(manifest_file)
+
+    layers = [
+        blobs_dir / layer["digest"].removeprefix(f"{HASH_PREFIX}:")
+        for layer in manifest["layers"]
+    ]
+    return layers
 
 
-# Main function to compute deep delta between two Docker images tar files
-# Unpacks both images, reconstructs their layer trees, compares layers by hash
-# For matching layers, marks them as unchanged; for differing layers, computes a delta
-# Repacks the new image with delta layers and cleans up
+def oci_deep_delta(
+    from_dir: Path,
+    to_dir: Path,
+    delta_dir: Path,
+    delta_filename: str,
+    delta_cmd: Optional[list[str]] = XDELTA_CMD,
+    logger: Optional[logging.Logger] = logging.getLogger(__name__),
+) -> Path:
+    """
+    Generate deep delta between OCI images.
 
+    Writes .vcdiff and .source files into delta_dir based on the layer files in to_dir and from_dir, bundled into a tar file.
 
-def deep_delta(
-    root_dir,
-    current,
-    new,
-    output,
-    log_level=logging.INFO,
-    delta_cmd=["xdelta3", "-f", "-e", "-s"],
-):
-    logger.setLevel(log_level)
+    :param from_dir: The path to the extracted current image.
+    :param to_dir: The path to the extracted new image.
+    :param delta_dir: The path under which to create the delta layers.
+    :param delta_filename: The name of the delta image archive file to create.
+    :param delta_cmd: The command to use for layer delta generation.
+    :param logger: A logger with which to log steps of function processes.
 
-    current_dir = os.path.join(root_dir, "current-image")
-    new_dir = os.path.join(root_dir, "new-image")
-    id2sum_current = {}
-    id2sum_new = {}
-    sum2path_new = {}
-    sum2path_current = {}
+    :returns: The image delta file.
 
-    tmp_file = tempfile.NamedTemporaryFile(delete=False).name
+    :raises: ImageDeltaException if images contain different numbers of layers.
+    """
+    # Load layers from current image manifest
+    from_layers = _read_layers_from_manifest(from_dir)
 
-    # Clean and prepare directories
-    if os.path.exists(current_dir):
-        shutil.rmtree(current_dir)
-    if os.path.exists(new_dir):
-        shutil.rmtree(new_dir)
-    os.makedirs(current_dir, exist_ok=True)
-    os.makedirs(new_dir, exist_ok=True)
+    # Load layers from new image manifest
+    to_layers = _read_layers_from_manifest(to_dir)
 
-    # Unpack tar files for current and new images
-    try:
-        with tarfile.open(current) as tar:
-            tar.extractall(current_dir, filter="tar")
-    except Exception as e:
-        logger.debug(f"ERROR errors unpacking {current}: {e}")
-        return 1
-    try:
-        with tarfile.open(new) as tar:
-            tar.extractall(new_dir, filter="tar")
-    except Exception as e:
-        logger.debug(f"ERROR errors unpacking {new}: {e}")
-        return 1
+    # Check if current image has more layers than new image
+    if len(from_layers) > len(to_layers):
+        logger.error(
+            "Failed to create image delta because the source image has more layers than the new one."
+        )
+        raise ImageDeltaException(
+            "Image delta generation failed: source image has more layers than the new one"
+        )
 
-    # Reconstruct parent-child layer trees for both images
-    parse_parent_child(current_dir)
-    parse_parent_child(new_dir)
+    delta_gen_dir = delta_dir / "gen"
+    logger.debug(f"Copying to-image dir {to_dir} to new delta dir {delta_gen_dir}.")
+    delta_gen_dir.mkdir(parents=True)
+    # Copy full dir to capture layout and accompanying files
+    shutil.copytree(to_dir, delta_gen_dir, dirs_exist_ok=True)
 
-    # Find all layer.tar files and calculate their sha256 hashes for current image
-    id2sum_current, sum2path_current = calc_image_layer_hashes(current_dir)
+    # Generate deltas for each layer pair
+    for i in range(len(from_layers)):
+        logger.debug(f"Diffing layer {i + 1} of {len(from_layers)}")
+        from_layer_path = from_layers[i]
+        to_layer_path = to_layers[i]
+        to_layer = to_layer_path.name
+        delta_layer_path = delta_gen_dir / "blobs" / HASH_PREFIX / to_layer
+        source_path = delta_gen_dir / "blobs" / HASH_PREFIX / (to_layer + ".source")
+        vcdiff_layer_path = (
+            delta_gen_dir / "blobs" / HASH_PREFIX / (to_layer + ".vcdiff")
+        )
 
-    # Find all layer.tar files and calculate their sha256 hashes for new image
-    id2sum_new, sum2path_new = calc_image_layer_hashes(new_dir)
-
-    # Compare layers by hash, compute delta for changed layers
-    max_level = min(len([p for p in sum2path_current]), len([p for p in sum2path_new]))
-    current_ids = list(id2sum_current.keys())
-    new_ids = list(id2sum_new.keys())
-
-    for i in range(max_level):
-        id_current = current_ids[i] if i < len(current_ids) else None
-        id_new = new_ids[i] if i < len(new_ids) else None
-        sum_current = id2sum_current.get(id_current)
-        sum_new = id2sum_new.get(id_new)
-        logger.debug(f"level {i} {id_new} {sum_new} {sum_current}")
-        if sum_new == sum_current:
-            logger.debug(f"      layers match sum:{sum_new}")
-            with open(sum2path_new[sum_new] + ".sha256sum", "w") as f:
-                f.write(sum_new)
-            os.remove(sum2path_new[sum_new])
-        else:
-            logger.debug(f"      modified layer")
-            logger.debug(
-                f"{' '.join(delta_cmd)} {sum2path_current.get(sum_current)} {sum2path_new.get(sum_new)} {tmp_file}"
-            )
-            subprocess.run(
-                [
-                    *delta_cmd,
-                    sum2path_current.get(sum_current),
-                    sum2path_new.get(sum_new),
-                    tmp_file,
-                ],
+        # Run delta command, creating the vcdiff file in the delta dir
+        try:
+            result = subprocess.run(
+                [*delta_cmd, from_layer_path, to_layer_path, vcdiff_layer_path],
+                capture_output=True,
                 check=True,
             )
-            shutil.move(tmp_file, sum2path_new[sum_new] + ".vcdiff")
-            with open(sum2path_new[sum_new] + ".current.sha256sum", "w") as f:
-                f.write(sum_current)
-            with open(sum2path_new[sum_new] + ".new.sha256sum", "w") as f:
-                f.write(sum_new)
-            os.remove(sum2path_new[sum_new])
+            if result.returncode != 0:
+                raise subprocess.SubprocessError(result.stdout, result.stderr)
+        except subprocess.CalledProcessError as e:
+            stderr_str = (
+                e.stderr.decode("utf-8", errors="ignore")
+                if isinstance(e.stderr, bytes)
+                else e.stderr
+            )
+            raise subprocess.SubprocessError(stderr_str)
 
-    # Clean up and repack the new image with delta layers
-    if os.path.exists(output):
-        os.remove(output)
-    shutil.rmtree(os.path.join(current_dir, "parent-child"), ignore_errors=True)
-    shutil.rmtree(os.path.join(new_dir, "parent-child"), ignore_errors=True)
-    with tarfile.open(output, "w") as tar:
-        tar.add(new_dir, arcname=".")
-    shutil.rmtree(current_dir, ignore_errors=True)
-    shutil.rmtree(new_dir, ignore_errors=True)
-    os.remove(current)
-    os.remove(new)
+        # Remove the layer file from the delta dir
+        delta_layer_path.unlink()
+
+        # Write source layer reference in the delta dir
+        with open(source_path, "w") as f:
+            f.write(from_layers[i].name)
+
+    delta_file = delta_dir / delta_filename
+    logger.debug(f"Layer diffing complete, creating delta file {delta_file}...")
+    with tarfile.open(delta_file, "w") as tar:
+        tar.add(delta_gen_dir, arcname=".")
+    logger.debug(
+        f"Delta file {delta_file} complete. Cleaning up delta gen dir {delta_gen_dir}."
+    )
+    shutil.rmtree(delta_gen_dir)
+    return delta_file

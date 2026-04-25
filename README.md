@@ -145,21 +145,27 @@ The environment variable inputs to the mender-docker-lifecycle-helper tool are a
 
 The CLI flag inputs are as follows:
 
-| Flag                 | Default                                                                                                       | Effect                                                                                                                                                                                       |
-| -------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--cache-dir`        | `${XDG_CACHE_HOME}/mender-docker-lifecycle-helper` if defined, else `~/.cache/mender-docker-lifecycle-helper` | The cache dir to which the metadata for the previously uploaded aritfact is saved. Overrides the MENDER_HELPER_CACHE_DIR variable.                                                           |
-| `--delta`            | `True`                                                                                                        | Generate the artifact as an update artifact, if applicable.                                                                                                                                  |
-| `--device-type`      | N/A                                                                                                           | Device type for the artifact (required).                                                                                                                                                     |
-| `--device-group`     | `None`                                                                                                        | Device group to which to deploy the artifact, or skip deployment if not defined.                                                                                                             |
-| `--log-level`        | `INFO`                                                                                                        | Set logging level. One of "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL".                                                                                                                   |
-| `--manifest-name`    | Immediate parent dir of `manifest_file`                                                                       | The application/software name for the artifact.                                                                                                                                              |
-| `--mender-host`      | `https://hosted.mender.io`                                                                                    | Mender host URL for artifact upload and deployment.                                                                                                                                          |
-| `--no-cache`         | `False`                                                                                                       | Skip reading previous artifact info from cache and always read from the repo at the previous version.                                                                                        |
-| `--platform`         | N/A                                                                                                           | Platform with which the artifact is compatible (required, e.g., linux/arm/v7).                                                                                                               |
-| `--previous-version` | Read from VERSION file                                                                                        | Repo ref from which to read image names and versions for comparison to the current state.                                                                                                    |
-| `--release`          | `False`                                                                                                       | Create the artifact for a release, using the current value of the VERSION file as the artifact version and the value of the VERSION file at the previous commit as the `--previous-version`. |
-| `--service-image`    | `None`                                                                                                        | Image name overrides for services in the `manifest_file`, as `[service]=[image]` (can be specified multiple times).                                                                          |
-| `[manifest_file]`    | N/A                                                                                                           | (Required) Path to the manifest file for which to generate the artifact (e.g., docker-compose.yaml).                                                                                         |
+| Flag                        | Default                                                                                                       | Effect                                                                                                                                                                                       |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-a`, `--artifact-filename` | `None`                                                                                                        | Name of the artifact file to create. Default: `<manifest-name>-<previous-version>+<current repo commit SHA>+<UUID>.mender`                                                                   |
+| `--cache-dir`               | `${XDG_CACHE_HOME}/mender-docker-lifecycle-helper` if defined, else `~/.cache/mender-docker-lifecycle-helper` | The cache dir to which the metadata for the previously uploaded aritfact is saved. Overrides the MENDER_HELPER_CACHE_DIR variable.                                                           |
+| `--no-cache`                | `False`                                                                                                       | Skip reading previous artifact info from cache and always read from the repo at the previous version.                                                                                        |
+| `--delta`                   | `True`                                                                                                        | Generate the artifact as an update artifact, if applicable.                                                                                                                                  |
+| `--device-type`             | N/A                                                                                                           | Device type for the artifact (required).                                                                                                                                                     |
+| `--device-group`            | `None`                                                                                                        | Device group to which to deploy the artifact, or skip deployment if not defined.                                                                                                             |
+| `-l`, `--log-level`         | `INFO`                                                                                                        | Set logging level. One of "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL".                                                                                                                   |
+| `--manifest-name`           | `<dirname of repo containing manifest_file>-<dirname directly containing manifest_file>`                      | The application/software name for the artifact.                                                                                                                                              |
+| `--mender-host`             | `https://hosted.mender.io`                                                                                    | Mender host URL for artifact upload and deployment.                                                                                                                                          |
+| `--platform`                | N/A                                                                                                           | Platform with which the artifact is compatible (required, e.g., linux/arm/v7).                                                                                                               |
+| `--previous-version`        | Read from VERSION file                                                                                        | Repo ref from which to read image names and versions for comparison to the current state.                                                                                                    |
+| `--release`                 | `False`                                                                                                       | Create the artifact for a release, using the current value of the VERSION file as the artifact version and the value of the VERSION file at the previous commit as the `--previous-version`. |
+| `-f`, `--service-file`      | `None`                                                                                                        | Image file to extract and use to override the image for the specified service in the manifest_file, as `--service-file <SERVICE NAME> <IMAGE FILE>` (can be specified multiple times).       |
+| `-i`, `--service-image`     | `None`                                                                                                        | Image name override for the specified service in the manifest_file, as `--service-image <SERVICE NAME> <IMAGE NAME>` (can be specified multiple times).                                      |
+| `-v`, `--verbose`           | `0`                                                                                                           | Increase verbosity by one level (see `--log-level`). Can be specified multiple times (e.g., `-vv`).                                                                                          |
+| `[manifest_file]`           | N/A                                                                                                           | (Required) Path to the manifest file for which to generate the artifact (e.g., docker-compose.yaml).                                                                                         |
+
+Additionally, the `--version` flag is available to display the tool version, and `--help` to display
+usage.
 
 #### mender-docker-lifecycle-helper outputs<a name="mender-docker-lifecycle-helper-outputs"></a>
 
@@ -305,7 +311,7 @@ jobs:
     uses: rcwbr/mender-docker-lifecycle-helper/.github/workflows/mender-docker-lifecycle-helper.yaml@0.3.2
     with:
       ...
-      service-images: ${{ format('["mdlh={0}"]', fromJSON(needs.build-docker-images.outputs.mender-docker-lifecycle-helper).uv-project['image.name']) }}
+      service-images: ${{ format('["mdlh {0}"]', fromJSON(needs.build-docker-images.outputs.mender-docker-lifecycle-helper).uv-project['image.name']) }}
 ```
 
 To be more precise, it overrides this way _unless the workflow is for a Git tag_ (indicating a
@@ -322,23 +328,40 @@ jobs:
     uses: rcwbr/mender-docker-lifecycle-helper/.github/workflows/mender-docker-lifecycle-helper.yaml@0.3.2
     with:
       ...
-      service-images: ${{ github.ref_type == 'tag' && '' || format('["mdlh={0}"]', fromJSON(needs.build-docker-images.outputs.mender-docker-lifecycle-helper).uv-project['image.name']) }}
+      service-images: ${{ github.ref_type == 'tag' && '' || format('["mdlh {0}"]', fromJSON(needs.build-docker-images.outputs.mender-docker-lifecycle-helper).uv-project['image.name']) }}
+```
+
+Similarly, the `service-files` input may be used to override service images with local image files
+(e.g., `.tar` files). This is useful when the workflow builds or downloads image files that should
+be included in the artifact:
+
+```yaml
+on: push
+jobs:
+  build-docker-images:
+    ...
+  mender-docker-lifecycle-helper:
+    uses: rcwbr/mender-docker-lifecycle-helper/.github/workflows/mender-docker-lifecycle-helper.yaml@0.3.2
+    with:
+      ...
+      service-files: '["web /path/to/web-image.tar", "api /path/to/api-image.tar"]'
 ```
 
 #### mender-docker-lifecycle-helper GitHub Actions workflow inputs<a name="mender-docker-lifecycle-helper-github-actions-workflow-inputs"></a>
 
 The full inputs for the workflow are as follows:
 
-| Input                       | Required | Default                                                | Type   | Effect                                                                                                                     |
-| --------------------------- | -------- | ------------------------------------------------------ | ------ | -------------------------------------------------------------------------------------------------------------------------- |
-| `device-group`              | ✗        | `''`                                                   | string | Device group to which to deploy the artifact, or skip deployment if not defined.                                           |
-| `device-type`               | ✓        | N/A                                                    | string | Device type for the artifact.                                                                                              |
-| `manifest-file`             | ✓        | N/A                                                    | string | Path to the manifest file for which to generate the artifact (e.g., docker-compose.yaml).                                  |
-| `mender-host`               | ✗        | `''`                                                   | string | Mender host URL for artifact upload and deployment.                                                                        |
-| `platform`                  | ✓        | N/A                                                    | string | Platform with which the artifact is compatible (e.g., linux/arm/v7).                                                       |
-| `service-images`            | ✗        | `''`                                                   | string | Image name overrides for services in the manifest_file, as a JSON array \["<service>=<image>", "<service>=<image>", ...\]. |
-| `helper-image`              | ✗        | `'ghcr.io/rcwbr/mender-docker-lifecycle-helper:0.3.2'` | string | Docker image to use as mender-docker-lifecycle-helper.                                                                     |
-| `secrets.mender-pat-secret` | ✓        | N/A                                                    | secret | Secret that contains the Mender server Personal Access Token to use for artifact upload and deployment.                    |
+| Input                       | Required | Default                                                | Type   | Effect                                                                                                                               |
+| --------------------------- | -------- | ------------------------------------------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `device-group`              | ✗        | `''`                                                   | string | Device group to which to deploy the artifact, or skip deployment if not defined.                                                     |
+| `device-type`               | ✓        | N/A                                                    | string | Device type for the artifact.                                                                                                        |
+| `manifest-file`             | ✓        | N/A                                                    | string | Path to the manifest file for which to generate the artifact (e.g., docker-compose.yaml).                                            |
+| `mender-host`               | ✗        | `''`                                                   | string | Mender host URL for artifact upload and deployment.                                                                                  |
+| `platform`                  | ✓        | N/A                                                    | string | Platform with which the artifact is compatible (e.g., linux/arm/v7).                                                                 |
+| `service-files`             | ✗        | `''`                                                   | string | Image file overrides for services in the manifest_file, as a JSON array \["<service> <image file>", "<service> <image file>", ...\]. |
+| `service-images`            | ✗        | `''`                                                   | string | Image name overrides for services in the manifest_file, as a JSON array \["<service> <image>", "<service> <image>", ...\].           |
+| `helper-image`              | ✗        | `'ghcr.io/rcwbr/mender-docker-lifecycle-helper:0.3.2'` | string | Docker image to use as mender-docker-lifecycle-helper.                                                                               |
+| `secrets.mender-pat-secret` | ✓        | N/A                                                    | secret | Secret that contains the Mender server Personal Access Token to use for artifact upload and deployment.                              |
 
 ## Contributing<a name="contributing"></a>
 

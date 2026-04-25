@@ -25,13 +25,12 @@ target device.
 To deploy the example for the first time, run:
 
 ```
-export MDLH_DELTA=false
-./examples/deploy-example [example folder]
+./examples/deploy-example [example folder] --no-delta
 ```
 
 ### Deployment to devcontainer update
 
-After a successful deployment, run without the `MDLH_DELTA` set to false:
+After a successful deployment, run without `--no-delta` flag:
 
 ```
 ./examples/deploy-example [example folder]

@@ -4,3 +4,4 @@ build
 coverage.xml
 **/*egg-info
 mender-docker-lifecycle-helper-nginx*
+examples/.client-dind
