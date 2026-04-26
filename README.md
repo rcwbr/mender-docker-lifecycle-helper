@@ -19,6 +19,8 @@ release deployment processes.
   - [Overview](#overview)
   - [mender-docker-lifecycle-helper-launcher](#mender-docker-lifecycle-helper-launcher)
     - [mender-docker-lifecycle-helper-launcher usage](#mender-docker-lifecycle-helper-launcher-usage)
+  - [mender-docker-lifecycle-helper-setup](#mender-docker-lifecycle-helper-setup)
+    - [mender-docker-lifecycle-helper-setup usage](#mender-docker-lifecycle-helper-setup-usage)
   - [mender-docker-lifecycle-helper container](#mender-docker-lifecycle-helper-container)
     - [mender-docker-lifecycle-helper container usage](#mender-docker-lifecycle-helper-container-usage)
   - [mender-docker-lifecycle-helper core](#mender-docker-lifecycle-helper-core)
@@ -95,6 +97,33 @@ tool, run:
 
 ```bash
 wget -qO - https://raw.githubusercontent.com/rcwbr/mender-docker-lifecycle-helper/refs/tags/1.1.0/mender-docker-lifecycle-helper-launcher | bash -s -- --help
+```
+
+## mender-docker-lifecycle-helper-setup<a name="mender-docker-lifecycle-helper-setup"></a>
+
+The mender-docker-lifecycle-helper-setup script sets up a local script equivalent to the
+[launcher](#mender-docker-lifecycle-helper-launcher), thus "installing" the tool to the CLI and
+enabling shell autocompletion (thanks to
+[Click](https://click.palletsprojects.com/en/stable/shell-completion/)). It may be used directly
+from this repo using `wget`:
+
+### mender-docker-lifecycle-helper-setup usage<a name="mender-docker-lifecycle-helper-setup-usage"></a>
+
+To run the mender-docker-lifecycle-helper-setup script, and thus launch a Docker container of the
+tool, run the following command in the location in which the script should reside:
+
+```bash
+wget -qO - https://raw.githubusercontent.com/rcwbr/mender-docker-lifecycle-helper/refs/tags/1.1.0/mender-docker-lifecycle-helper-setup >mender-docker-lifecycle-helper && bash mender-docker-lifecycle-helper setup
+```
+
+This will download the setup script, which will unpack itself into the launcher script and the Zsh
+completion script. It will prompt to add to the `~/.zshrc`:
+
+```bash
+Add the following to ~/.zshrc to complete setup:
+
+. /your/download/path/mender-docker-lifecycle-helper_comp
+export PATH=/your/download/path:$PATH
 ```
 
 ## mender-docker-lifecycle-helper container<a name="mender-docker-lifecycle-helper-container"></a>
