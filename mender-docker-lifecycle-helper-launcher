@@ -3,7 +3,7 @@
 set -e
 
 
-MDLH_IMAGE="${MDLH_IMAGE:-ghcr.io/rcwbr/mender-docker-lifecycle-helper:1.0.1}"
+MDLH_IMAGE="${MDLH_IMAGE:-ghcr.io/rcwbr/mender-docker-lifecycle-helper:1.0.2}"
 MDLH_ARGS="${MDLH_ARGS:-}$*"
 
 # shellcheck disable=SC2086
