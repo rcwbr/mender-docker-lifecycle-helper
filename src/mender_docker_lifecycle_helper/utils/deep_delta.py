@@ -26,9 +26,8 @@ def _read_layers_from_manifest(
     Reads the layers from an OCI image manifest file.
 
     :param image_dir: The directory in which the image is extracted.
-    :param logger: A logger with which to log steps of function processes.
-
-    :returns: The list of paths to the layers referenced by the image manifest.
+    :param logger: A logger with which to log steps of function processes, defaults to logging.getLogger(__name__).
+    :return: The list of paths to the layers referenced by the image manifest.
     """
     blobs_dir = image_dir / "blobs" / HASH_PREFIX
 
@@ -69,12 +68,10 @@ def oci_deep_delta(
     :param to_dir: The path to the extracted new image.
     :param delta_dir: The path under which to create the delta layers.
     :param delta_filename: The name of the delta image archive file to create.
-    :param delta_cmd: The command to use for layer delta generation.
-    :param logger: A logger with which to log steps of function processes.
-
-    :returns: The image delta file.
-
-    :raises: ImageDeltaException if images contain different numbers of layers.
+    :param delta_cmd: The command to use for layer delta generation, defaults to XDELTA_CMD.
+    :param logger: A logger with which to log steps of function processes, defaults to logging.getLogger(__name__).
+    :raises ImageDeltaException: If images contain different numbers of layers.
+    :return: The image delta file.
     """
     # Load layers from current image manifest
     from_layers = _read_layers_from_manifest(from_dir)

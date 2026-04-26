@@ -39,11 +39,11 @@ class ImageCache:
         Construct an ImageCache object, reading cache dir contents into maps if present or creating them as empty dirs.
 
         :param cache_dir: The top-level directory of the image cache.
-        :param delta_cache_dirname: The name of the subdirectory for image deltas.
-        :param extract_cache_dirname: The name of the subdirectory for image extracts.
-        :param image_filename: The filename to use for image save files.
-        :param save_cache_dirname: The name of the subdirectory for image saves.
-        :param logger: A logger with which to log steps of cache processes.
+        :param delta_cache_dirname: The name of the subdirectory for image deltas, defaults to DELTA_CACHE_DIRNAME.
+        :param extract_cache_dirname: The name of the subdirectory for image extracts, defaults to EXTRACT_CACHE_DIRNAME.
+        :param image_file_name: The filename to use for image save files, defaults to IMAGE_FILE_NAME.
+        :param save_cache_dirname: The name of the subdirectory for image saves, defaults to SAVE_CACHE_DIRNAME.
+        :param logger: A logger with which to log steps of cache processes, defaults to logging.getLogger(__name__).
         """
         self.logger = logger
         self.image_file_name = image_file_name
@@ -81,8 +81,7 @@ class ImageCache:
 
         :param from_image: The metadata (specifically {ref: <ref>, hash: <hash>}) of the image from which the delta is defined.
         :param to_image: The metadata (specifically {ref: <ref>, hash: <hash>}) of the image to which the delta is defined.
-
-        :returns: The path to the delta file for the given from and to image hash.
+        :return: The path to the delta file for the given from and to image hash.
         """
         from_hash = from_image["hash"]
         to_hash = to_image["hash"]
@@ -118,10 +117,8 @@ class ImageCache:
 
         :param extract_dir: The path into which to extract the OCI file.
         :param extract_file: The OCI file to extract.
-
-        :returns: None
-
-        :raises ImageDirFormatException: indicates that the specified image file is not in the correct format.
+        :raises ImageDirFormatException: Indicates that the specified image file is not in the correct format.
+        :return: None
         """
         with tarfile.open(extract_file, "r:*") as tar:
             tar.extractall(
@@ -139,9 +136,8 @@ class ImageCache:
         Extract image from a specified file to the cache and read and return the image metadata.
 
         :param extract_file: The path to the OCI image archive file to extract into the cache space.
-        :returns: The image specification (as {ref: <ref>, hash: <hash>}) as read from the file.
-
-        :raises ImageDirFormatException: indicates that the specified image file is not in the correct format.
+        :raises ImageDirFormatException: Indicates that the specified image file is not in the correct format.
+        :return: The image specification (as {ref: <ref>, hash: <hash>}) as read from the file.
         """
 
         image_ref = ""
@@ -198,8 +194,7 @@ class ImageCache:
         Extract an image with the given hash in the cache and return the path to the extracted image dir. If the image is not yet in the image save cache, it will be added there first.
 
         :param image: The metadata (specifically {ref: <ref>, hash: <hash>}) of the image to extract.
-
-        :returns: The path to the extracted image directory.
+        :return: The path to the extracted image directory.
         """
         image_hash = image["hash"]
         if image_hash in self.extract_cache:
@@ -223,7 +218,7 @@ class ImageCache:
         Save an image with the given ref and hash to the save cache, if not already present.
 
         :param image: The metadata (specifically {ref: <ref>, hash: <hash>}) of the image to save.
-        :returns: The path to the image file in the save cache.
+        :return: The path to the image file in the save cache.
         """
         image_hash = image["hash"]
         if image_hash in self.save_cache:

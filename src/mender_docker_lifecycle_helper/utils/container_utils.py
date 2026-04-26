@@ -31,8 +31,7 @@ def _split_image_ref(image_ref: str) -> tuple[str, str, str]:
     Split an image ref into its component parts, if present.
 
     :param image_ref: The image ref to split.
-
-    :returns: A tuple of the image registry, tag, and hash, or None if not specified.
+    :return: A tuple of the image registry, tag, and hash, or None if not specified.
     """
     image_registry = None
     image_tag = None
@@ -66,8 +65,7 @@ def _image_ref_hash_or_tag(
     :param image_registry: The registry portion of image ref.
     :param image_tag: The tag portion of image ref.
     :param image_hash: The hash portion of image ref.
-
-    :returns: The reconstructed image ref.
+    :return: The reconstructed image ref.
     """
     if image_hash is not None:
         return f"{image_registry}{REF_HASH_SEPARATOR}{image_hash}"
@@ -86,8 +84,8 @@ def get_image_hash(
 
     :param image_ref: The image ref for which to get the hash.
     :param logger: The logger object to which to report.
-
-    :returns: The hash of the image.
+    :raises ValueError: If the image hash cannot be retrieved.
+    :return: The hash of the image.
     """
 
     image_hash = None
@@ -145,9 +143,8 @@ def save_registry_image_to_file(
 
     :param image_ref: The ref of the image to save.
     :param file: The path of the file to which to save the image.
-
-    :returns: The completed process from the subprocess call.
-    :raises: ImageNotFoundException if the save operation cannot find the image.
+    :raises ImageNotFoundException: If the save operation cannot find the image.
+    :return: The completed process from the subprocess call.
     """
 
     image_ref = _image_ref_hash_or_tag(*_split_image_ref(image_ref))
@@ -186,9 +183,8 @@ def save_local_image_to_file(
 
     :param image_hash: The hash of the image to save.
     :param file: The path of the file to which to save the image.
-
-    :returns: The completed process from the subprocess call.
-    :raises: ImageNotFoundException if the save operation cannot find the image.
+    :raises ImageNotFoundException: If the save operation cannot find the image.
+    :return: The completed process from the subprocess call.
     """
     # skopeo copy docker-daemon:<image_hash> oci-archive:<file>
     try:
@@ -230,9 +226,9 @@ def save_image_to_file(
 
     :param image: The metadata (as {ref: <ref>, hash: <hash>}) of the image to save.
     :param file: The path of the file to which to save the image.
-
-    :returns: The completed process from the subprocess call.
-    :raises: ImageRefHashMismatchException if the metadata ref contains a hash that does not match the provided metadata hash; ImageNotFoundException if the image cannot be found.
+    :raises ImageRefHashMismatchException: If the metadata ref contains a hash that does not match the provided metadata hash.
+    :raises ImageNotFoundException: If the image cannot be found.
+    :return: The completed process from the subprocess call.
     """
     image_ref = image["ref"]
     image_hash = image["hash"]

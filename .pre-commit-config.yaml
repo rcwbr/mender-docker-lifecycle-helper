@@ -20,7 +20,7 @@ repos:
   rev: 0.7.17
   hooks:
   - id: mdformat
-    exclude: '.github/ISSUE_TEMPLATE/.*\.md$'
+    exclude: '.github/ISSUE_TEMPLATE/.*\.md$|docs/api.md'
     additional_dependencies:
     - mdformat-black
     - mdformat-config

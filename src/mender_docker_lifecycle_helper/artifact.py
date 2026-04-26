@@ -70,10 +70,8 @@ class LifecycleHelperArtifact:
 
         :param context: The context of the lifecycle helper execution.
         :param arg_list: The arguments to supply to the mender-artifact executable.
-
-        :returns: The stdout output of the mender-artifact execution.
-
-        :raises: RuntimeError if the mender-artifact execution fails.
+        :raises RuntimeError: If the mender-artifact execution fails.
+        :return: The stdout output of the mender-artifact execution.
         """
         rendered_args = "\n  ".join(arg_list)
         context.logger.debug(f"Calling mender-artifact with args: \n  {rendered_args}")
@@ -104,10 +102,8 @@ class LifecycleHelperArtifact:
         :param service_name: The name of the service in the manifest for which to generate an image delta.
         :param service_image: The metadata of the image for which to generate a delta.
         :param artifact_image_prep_dir: The directory into which the image delta file will be written.
-
-        :returns: None
-
-        :raises: ImageDeltaException if the delta generation fails.
+        :raises ImageDeltaException: If the delta generation fails.
+        :return: None
         """
         self.context.logger.debug(f"Preparing image delta for service {service_name}")
         # Generate a delta file in the artifact. If the image ref and hash for a service match those in the previous artifact metadata, each layer diff will be empty.
@@ -134,9 +130,9 @@ class LifecycleHelperArtifact:
 
         :param service_name: The name of the service in the manifest for which to generate an image delta.
         :param service_image: The metadata of the image for which to generate a delta.
-        :param artifact_image_prep_dir: The directory into which the image directory will be created.
-
-        :returns: None
+        :param artifact_images_prep_dir: The directory into which the image directory will be created.
+        :raises ImageDeltaException: If delta generation fails.
+        :return: None
         """
         artifact_image_prep_dir = artifact_images_prep_dir / service_image["hash"]
         self.context.logger.debug(
@@ -184,8 +180,7 @@ class LifecycleHelperArtifact:
 
         :param artifact_prep_dir: The directory into which the images archive will be generated.
         :param images_archive_filename: The name of the images archive file to generate.
-
-        :returns: None
+        :return: None
         """
         artifact_images_prep_dir = artifact_prep_dir / "images_prep"
         self.context.logger.debug(
@@ -220,8 +215,7 @@ class LifecycleHelperArtifact:
 
         :param artifact_prep_dir: The directory into which the manifests archive will be generated.
         :param manifests_archive_filename: The name of the manifests archive file to generate.
-
-        :returns: None
+        :return: None
         """
         artifact_manifests_prep_dir = artifact_prep_dir / "manifests_prep"
         self.context.logger.debug(
@@ -260,8 +254,7 @@ class LifecycleHelperArtifact:
         :param images_archive_filename: The filename for the artifact images archive.
         :param manifests_archive_filename: The filename for the artifact manifests archive.
         :param metadata_filename: The filename for the artifact metadata file.
-
-        :returns: None
+        :return: None
         """
 
         self.prep_manifests(artifact_prep_dir, manifests_archive_filename)
@@ -283,7 +276,7 @@ class LifecycleHelperArtifact:
         """
         Prepare the artifact by generating necessary files and processing via the mender-artifact tool.
 
-        :returns: None
+        :return: None
         """
         artifact_prep_dir = self.context.temp_dir / "artifact_prep"
         images_archive_filename = "images.tar.gz"
@@ -324,16 +317,16 @@ class LifecycleHelperArtifact:
         Determine the services metadata for the current artifact, including reading the image hashes from remote images when required. To establish this list, any provided service-file image archives are extracted and read.
 
         :param context: The context of the lifecycle helper execution.
-
-        :returns: The services to be included in the current artifact, in the following dict structure:
-        {
-            serviceName: {
-                image: {
-                    ref: str,
-                    hash: str
+        :raises ManifestContentMismatchException: If service name in args not found in manifest.
+        :return: The services to be included in the current artifact, in the following dict structure:
+            {
+                serviceName: {
+                    image: {
+                        ref: str,
+                        hash: str
+                    }
                 }
             }
-        }
         """
 
         context.logger.info("Determining services for the artifact.")

@@ -22,7 +22,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest-cov>=7.0.0"
+    "mike>=2.2.0",
+    "mkdocs-material>=9.7.6",
+    "mkdocstrings-python>=2.0.3",
+    "pytest-cov>=7.0.0",
+    "uv>=0.11.7"
 ]
 
 [tool.setuptools.packages.find]

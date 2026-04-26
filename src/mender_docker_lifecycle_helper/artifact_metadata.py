@@ -13,14 +13,14 @@ class ArtifactMetadata:
 
         :param version: The version identifier for the artifact.
         :param services: The metadata of the services included in the artifact. The structure of this metadata is:
-        {
-            serviceName: {
-                image: {
-                    ref: str,
-                    hash: str
+            {
+                serviceName: {
+                    image: {
+                        ref: str,
+                        hash: str
+                    }
                 }
             }
-        }
         """
         self.version = version
         self.services = services if services is not None else {}
@@ -31,8 +31,7 @@ class ArtifactMetadata:
         Construct an ArtifactMetadata object directly from a dict.
 
         :param data: The metadata for the artifact, structured as the to_dict return value.
-
-        :returns: An ArtifactMetadata object constructed from the provided data.
+        :return: An object constructed from the provided data.
         """
         return cls(version=data.get("version"), services=data.get("services", {}))
 
@@ -42,8 +41,7 @@ class ArtifactMetadata:
         Construct an ArtifactMetadata object directly from a file.
 
         :param file_path: The path to a JSON file containing the artifact metadata, structured as the to_dict return value.
-
-        :returns: An ArtifactMetadata object constructed from the provided file.
+        :return: An object constructed from the provided file.
         """
         with open(file_path, "r") as f:
             data = json.load(f)
@@ -53,13 +51,13 @@ class ArtifactMetadata:
         """
         Dump the contents of the artifact metadata as a dict.
 
-        :returns: The metadata of the artifact, structured as:
-        {
-            version: str,
-            services: {
-                ... (see services param in __init__)
+        :return: The metadata of the artifact, structured as:
+            {
+                version: str,
+                services: {
+                    ... (see services param in __init__)
+                }
             }
-        }
         """
         return {"version": self.version, "services": self.services}
 
@@ -68,7 +66,7 @@ class ArtifactMetadata:
         Dump the contents of the artifact metadata to a file, as JSON structured as the to_dict return value.
 
         :param file_path: The path to which to dump the metadata of the artifact.
-        :returns: None
+        :return: None
         """
         file_path.parent.mkdir(parents=True, exist_ok=True)
         with open(file_path, "w") as f:
