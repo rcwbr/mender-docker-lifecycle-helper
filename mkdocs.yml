@@ -44,8 +44,10 @@ plugins:
 theme:
   favicon: TODO
   features:
+    - content.code.copy
     - search.highlight
     - search.share
+    - versioning
   icon:
     logo: fontawesome/solid/arrows-turn-to-dots
     repo: fontawesome/brands/github
