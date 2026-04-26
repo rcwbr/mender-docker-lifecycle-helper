@@ -8,14 +8,14 @@ MDLH_ARGS="${MDLH_ARGS:-}$*"
 
 # shellcheck disable=SC2086
 docker run \
-  --rm \
-  -i \
-  --name mender-docker-lifecycle-helper \
-  -e MENDER_PAT \
-  -e MENDER_HELPER_CACHE_DIR=/mender-helper-cache \
-  -e DOCKER_CONFIG_JSON="$(cat ~/.docker/config.json)" \
-  -v mender-helper-cache:/mender-helper-cache \
-  -v "$(pwd):$(pwd)" \
-  -w "$(pwd)" \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  "${MDLH_IMAGE}" ${MDLH_ARGS}
+    --rm \
+    -i \
+    --name mender-docker-lifecycle-helper \
+    -e MENDER_PAT \
+    -e MENDER_HELPER_CACHE_DIR=/mender-helper-cache \
+    -e DOCKER_CONFIG_JSON="$(cat ~/.docker/config.json)" \
+    -v mender-helper-cache:/mender-helper-cache \
+    -v "$(pwd):$(pwd)" \
+    -w "$(pwd)" \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    "${MDLH_IMAGE}" ${MDLH_ARGS}

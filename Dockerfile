@@ -18,7 +18,7 @@ RUN DEBIAN_FRONTEND=noninteractive \
 RUN wget -q https://github.com/lework/skopeo-binary/releases/download/v1.22.0/skopeo-linux-amd64 -O /usr/bin/skopeo \
     && chmod +x /usr/bin/skopeo
 
-    COPY <<EOF /etc/containers/policy.json
+COPY <<EOF /etc/containers/policy.json
 {
     "default": [
         {

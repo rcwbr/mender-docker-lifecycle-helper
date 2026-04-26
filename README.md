@@ -1,6 +1,7 @@
 # mender-docker-lifecycle-helper<a name="mender-docker-lifecycle-helper"></a>
 
 [![GitHub Release](https://img.shields.io/github/v/release/rcwbr/mender-docker-lifecycle-helper?logo=semver&style=flat-square)](https://github.com/rcwbr/mender-docker-lifecycle-helper/releases/latest)
+[![PyPI - Version](https://img.shields.io/pypi/v/mender-docker-lifecycle-helper?style=flat-square&color=yellow)](https://pypi.org/project/mender-docker-lifecycle-helper/)
 [![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/rcwbr/mender-docker-lifecycle-helper/push-workflow.yaml?logo=github&style=flat-square)](https://github.com/rcwbr/mender-docker-lifecycle-helper/actions/workflows/push-workflow.yaml?query=branch%3Amain)
 [![codecov](https://codecov.io/github/rcwbr/mender-docker-lifecycle-helper/graph/badge.svg?token=3407T4QQ6C&style=flat-square)](https://codecov.io/github/rcwbr/mender-docker-lifecycle-helper)
 [![Dive Docker efficiency](<https://img.shields.io/badge/dynamic/regex?label=dive%20efficiency&logo=docker&logoColor=white&style=flat-square&url=https%3A%2F%2Fgithub.com%2Frcwbr%2Fmender-docker-lifecycle-helper%2Freleases%2Flatest%2Fdownload%2Fdive.json&search=%22efficiencyScore%22%3A%20%5B0-9%5D%2B.(%5B0-9%5D%7B2%7D)(%5B0-9%5D%7B2%7D)&replace=%241.%242%25>)](https://github.com/wagoodman/dive)
@@ -19,6 +20,8 @@ release deployment processes.
   - [Overview](#overview)
   - [mender-docker-lifecycle-helper-launcher](#mender-docker-lifecycle-helper-launcher)
     - [mender-docker-lifecycle-helper-launcher usage](#mender-docker-lifecycle-helper-launcher-usage)
+  - [mender-docker-lifecycle-helper-setup](#mender-docker-lifecycle-helper-setup)
+    - [mender-docker-lifecycle-helper-setup usage](#mender-docker-lifecycle-helper-setup-usage)
   - [mender-docker-lifecycle-helper container](#mender-docker-lifecycle-helper-container)
     - [mender-docker-lifecycle-helper container usage](#mender-docker-lifecycle-helper-container-usage)
   - [mender-docker-lifecycle-helper core](#mender-docker-lifecycle-helper-core)
@@ -29,6 +32,7 @@ release deployment processes.
       - [mender-docker-lifecycle-helper - mender-artifact contexts](#mender-docker-lifecycle-helper---mender-artifact-contexts)
         - [mender-artifact previous version conditions](#mender-artifact-previous-version-conditions)
         - [mender-artifact delta artifact conditions](#mender-artifact-delta-artifact-conditions)
+      - [Alternative installation via PyPi](#alternative-installation-via-pypi)
   - [mender-docker-lifecycle-helper GitHub Actions workflow](#mender-docker-lifecycle-helper-github-actions-workflow)
     - [mender-docker-lifecycle-helper GitHub Actions workflow usage](#mender-docker-lifecycle-helper-github-actions-workflow-usage)
       - [mender-docker-lifecycle-helper GitHub Actions workflow inputs](#mender-docker-lifecycle-helper-github-actions-workflow-inputs)
@@ -94,6 +98,33 @@ tool, run:
 
 ```bash
 wget -qO - https://raw.githubusercontent.com/rcwbr/mender-docker-lifecycle-helper/refs/tags/1.1.0/mender-docker-lifecycle-helper-launcher | bash -s -- --help
+```
+
+## mender-docker-lifecycle-helper-setup<a name="mender-docker-lifecycle-helper-setup"></a>
+
+The mender-docker-lifecycle-helper-setup script sets up a local script equivalent to the
+[launcher](#mender-docker-lifecycle-helper-launcher), thus "installing" the tool to the CLI and
+enabling shell autocompletion (thanks to
+[Click](https://click.palletsprojects.com/en/stable/shell-completion/)). It may be used directly
+from this repo using `wget`:
+
+### mender-docker-lifecycle-helper-setup usage<a name="mender-docker-lifecycle-helper-setup-usage"></a>
+
+To run the mender-docker-lifecycle-helper-setup script, and thus launch a Docker container of the
+tool, run the following command in the location in which the script should reside:
+
+```bash
+wget -qO - https://raw.githubusercontent.com/rcwbr/mender-docker-lifecycle-helper/refs/tags/1.1.0/mender-docker-lifecycle-helper-setup >mender-docker-lifecycle-helper && bash mender-docker-lifecycle-helper setup
+```
+
+This will download the setup script, which will unpack itself into the launcher script and the Zsh
+completion script. It will prompt to add to the `~/.zshrc`:
+
+```bash
+Add the following to ~/.zshrc to complete setup:
+
+. /your/download/path/mender-docker-lifecycle-helper_comp
+export PATH=/your/download/path:$PATH
 ```
 
 ## mender-docker-lifecycle-helper container<a name="mender-docker-lifecycle-helper-container"></a>
@@ -244,6 +275,45 @@ table:
 | The image hash in each `<images>/sums-current.txt` belongs to the services defined in this version of the Compose file | Latest cache state (same as current repo state)                                       | Latest cache state                                                                    | Repo state at [previous version](#mender-artifact-previous-version-conditions)        |
 | The image ref in each `<images>/url-current.txt` belongs to the services defined in this version of the Compose file   | Latest cache state (same as current repo state)                                       | Latest cache state                                                                    | Repo state at [previous version](#mender-artifact-previous-version-conditions)        |
 | `--depends rootfs-image.<repo name><manifest name>.version:` version ID                                                | Cache previous artifact version ID                                                    | Cache previous artifact version ID                                                    | [Previous version](#mender-artifact-previous-version-conditions)                      |
+
+#### Alternative installation via PyPi<a name="alternative-installation-via-pypi"></a>
+
+The mender-docker-lifecycle-helper core tool can be installed directly from PyPi using pip:
+
+```bash
+pip install mender-docker-lifecycle-helper
+```
+
+This method requires the following system packages to be available:
+
+| Package         | Version |
+| --------------- | ------- |
+| mender-artifact | 3.9.0   |
+| jq              | 1.6     |
+| tree            | 2.1.0   |
+| xdelta3         | 3.0.11  |
+| skopeo          | 1.22.0  |
+
+Additionally, the following configuration must be present in `/etc/containers/policy.json`:
+
+```json
+{
+  "default": [
+    {
+      "type": "insecureAcceptAnything"
+    }
+  ],
+  "transports": {
+    "docker-daemon": {
+      "": [
+        {
+          "type": "insecureAcceptAnything"
+        }
+      ]
+    }
+  }
+}
+```
 
 ## mender-docker-lifecycle-helper GitHub Actions workflow<a name="mender-docker-lifecycle-helper-github-actions-workflow"></a>
 

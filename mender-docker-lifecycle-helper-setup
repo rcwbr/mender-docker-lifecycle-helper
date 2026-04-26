@@ -1,0 +1,45 @@
+#!/bin/bash
+
+set -e
+
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+SETUP_DIR=${SCRIPT_DIR}/.mender-docker-lifecycle-helper-setup
+mkdir -p "${SETUP_DIR}"
+
+LAUNCHER_SCRIPT="${SETUP_DIR}/mender-docker-lifecycle-helper"
+cat <<- EOF > "${LAUNCHER_SCRIPT}"
+#!/bin/bash
+
+MDLH_IMAGE="\${MDLH_IMAGE:-ghcr.io/rcwbr/mender-docker-lifecycle-helper:1.1.0}"
+MDLH_ARGS="\${MDLH_ARGS:-}\$*"
+
+# shellcheck disable=SC2086
+docker run \\
+    --rm \\
+    -i \\
+    --name mender-docker-lifecycle-helper \\
+    -e MENDER_PAT \\
+    -e MENDER_HELPER_CACHE_DIR=/mender-helper-cache \\
+    -e DOCKER_CONFIG_JSON="\$(cat ~/.docker/config.json)" \\
+    -e _MENDER_DOCKER_LIFECYCLE_HELPER_COMPLETE \\
+    -e COMP_WORDS \\
+    -e COMP_CWORD \\
+    -v mender-helper-cache:/mender-helper-cache \\
+    -v "\$(pwd):\$(pwd)" \\
+    -w "\$(pwd)" \\
+    -v /var/run/docker.sock:/var/run/docker.sock \\
+    "\${MDLH_IMAGE}" \${mdlh_args[@]}
+EOF
+sudo chmod +x "${LAUNCHER_SCRIPT}"
+
+PATH="${SETUP_DIR}:${PATH}" _MENDER_DOCKER_LIFECYCLE_HELPER_COMPLETE=zsh_source mender-docker-lifecycle-helper > "${BASH_SOURCE[0]}_comp"
+
+echo "mender-docker-lifecycle-helper launcher loaded."
+echo "Add the following to ~/.zshrc to complete setup:"
+echo ""
+echo ". ${SCRIPT_DIR}/${BASH_SOURCE[0]}_comp"
+echo "export PATH=${SCRIPT_DIR}:\$PATH"
+echo ""
+
+mv "${LAUNCHER_SCRIPT}" "${BASH_SOURCE[0]}"
+rm -rf "${SETUP_DIR}"

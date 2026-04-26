@@ -189,3 +189,22 @@ jobs:
         uses: actions/deploy-pages@v5
         with:
           token: ${{ github.token }}
+  pypi-publish:
+    if: ${{ github.ref_type == 'tag' }}
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+    needs: devcontainer-cache-build
+    container:
+      image: ${{ needs.devcontainer-cache-build.outputs.devcontainer-cache-image-ref }}
+      options: --user root
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Build
+        run: $UV_PROJECT_ENVIRONMENT/bin/uv build
+      - name: Publish
+        run: $UV_PROJECT_ENVIRONMENT/bin/uv publish
