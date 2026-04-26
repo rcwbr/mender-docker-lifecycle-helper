@@ -86,7 +86,7 @@ rulesets:
     conditions:
       ref_name:
         include:
-          - "refs/heads/docs"
+          - "refs/heads/mkdocs"
         exclude: []
     bypass_actors:
       - actor_id: 3510426 # mdlh CI docs app
