@@ -100,13 +100,19 @@ rulesets:
 collaborators: [] # No collaborators defined
 
 environments:
-  - name: Repo release # Must match the app-environment workflow input
-    deployment_branch_policy:
-      custom_branches:
-        - main
   - name: github-pages
     deployment_branch_policy:
       custom_branches:
         - main
         - name: "*"
           type: tag
+  - name: pypi
+    deployment_branch_policy:
+      custom_branches:
+        - main
+        - name: "*"
+          type: tag
+  - name: Repo release # Must match the app-environment workflow input
+    deployment_branch_policy:
+      custom_branches:
+        - main
