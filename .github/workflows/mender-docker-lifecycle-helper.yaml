@@ -44,7 +44,7 @@ on:
         required: true
 jobs:
   mender-docker-lifecycle-helper:
-    name: Mender Docker Lifecycle Helper${{ matrix.release && ' release' || '' }} - ${{ matrix.delta && 'delta' }}
+    name: Mender Docker Lifecycle Helper - ${{ matrix.release && 'release - ' || '' }}${{ matrix.delta && 'delta' || 'no delta' }}
     strategy:
       matrix:
         delta: [ true, false ]
@@ -74,8 +74,8 @@ jobs:
           mender-docker-lifecycle-helper \
             --platform ${{ inputs.platform }} \
             --device-type ${{ inputs.device-type }} \
-            ${{ matrix.delta && '' || '--no-delta' }} \
-            ${{ matrix.release && '--release' || '' }} \
+            ${{ matrix.delta && '--delta' || '--no-delta' }} \
+            ${{ matrix.release && '--release' || '--no-release' }} \
             ${{ inputs.device-group && format('--device-group {0}', inputs.device-group) || '' }} \
             ${{ inputs.mender-host && format('--mender-host {0}', inputs.mender-host) || '' }} \
             ${{ inputs.service-images && format('--service-image {0}', join(fromJSON(inputs.service-images), '--service-image')) || '' }} \
