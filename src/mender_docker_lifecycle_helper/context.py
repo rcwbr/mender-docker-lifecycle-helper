@@ -273,7 +273,7 @@ class LifecycleHelperContext:
         if not previous_manifest_file.exists():
             self.logger.error(f"Manifest file {previous_manifest_file} does not exist.")
             raise FileNotFoundError(
-                "Manifest file {previous_manifest_file} does not exist."
+                f"Manifest file {previous_manifest_file} does not exist."
             )
 
         return ArtifactMetadata(

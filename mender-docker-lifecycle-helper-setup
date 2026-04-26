@@ -28,7 +28,7 @@ docker run \\
     -v "\$(pwd):\$(pwd)" \\
     -w "\$(pwd)" \\
     -v /var/run/docker.sock:/var/run/docker.sock \\
-    "\${MDLH_IMAGE}" \${mdlh_args[@]}
+    "\${MDLH_IMAGE}" \${MDLH_ARGS}
 EOF
 sudo chmod +x "${LAUNCHER_SCRIPT}"
 
