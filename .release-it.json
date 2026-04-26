@@ -25,6 +25,10 @@
         {
           "file": "mender-docker-lifecycle-helper-launcher",
           "type": "text/plain"
+        },
+        {
+          "file": "mender-docker-lifecycle-helper-setup",
+          "type": "text/plain"
         }
       ]
     }
