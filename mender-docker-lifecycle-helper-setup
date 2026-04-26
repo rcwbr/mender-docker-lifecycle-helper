@@ -10,7 +10,7 @@ LAUNCHER_SCRIPT="${SETUP_DIR}/mender-docker-lifecycle-helper"
 cat <<- EOF > "${LAUNCHER_SCRIPT}"
 #!/bin/bash
 
-MDLH_IMAGE="\${MDLH_IMAGE:-ghcr.io/rcwbr/mender-docker-lifecycle-helper:1.1.0}"
+MDLH_IMAGE="\${MDLH_IMAGE:-ghcr.io/rcwbr/mender-docker-lifecycle-helper:1.2.0}"
 MDLH_ARGS="\${MDLH_ARGS:-}\$*"
 
 # shellcheck disable=SC2086

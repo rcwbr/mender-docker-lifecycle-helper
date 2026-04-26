@@ -7,7 +7,7 @@
 [![Dive Docker efficiency](<https://img.shields.io/badge/dynamic/regex?label=dive%20efficiency&logo=docker&logoColor=white&style=flat-square&url=https%3A%2F%2Fgithub.com%2Frcwbr%2Fmender-docker-lifecycle-helper%2Freleases%2Flatest%2Fdownload%2Fdive.json&search=%22efficiencyScore%22%3A%20%5B0-9%5D%2B.(%5B0-9%5D%7B2%7D)(%5B0-9%5D%7B2%7D)&replace=%241.%242%25>)](https://github.com/wagoodman/dive)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white&style=flat-square)](https://github.com/pre-commit/pre-commit)
 [![Commitlint](https://img.shields.io/badge/commitlint-enabled-navy?style=flat-square&logo=commitlint&logoColor=white)](https://commitlint.js.org/)
-[![Conventional Commits](https://img.shields.io/badge/conventional_commits-compliant-pink?style=flat-square&logo=conventionalcommits&logoColor=white)](https://www.conventionalcommits.org/en/v1.1.0/)
+[![Conventional Commits](https://img.shields.io/badge/conventional_commits-compliant-pink?style=flat-square&logo=conventionalcommits&logoColor=white)](https://www.conventionalcommits.org/en/v1.2.0/)
 [![Python Black](https://img.shields.io/badge/code_style-black-black?style=flat-square&logo=black&logoColor=white)](https://github.com/psf/black?tab=readme-ov-file)
 
 Management tool for Mender Docker application workloads in local and CI development iteration and
@@ -59,7 +59,7 @@ The tool is a wrapper around
 [Mender's mender-artifact tool](https://github.com/mendersoftware/mender-artifact) plus upload and
 deployment of its produced artifact via [Mender server](https://docs.mender.io/server-installation).
 It generates artifacts similarly to the
-[app-gen tool](https://github.com/mendersoftware/app-update-module/tree/1.1.0/gen), but with
+[app-gen tool](https://github.com/mendersoftware/app-update-module/tree/1.2.0/gen), but with
 inference of artifact details from the execution context.
 
 <b>In other words, use mender-docker-lifecycle-helper if you are deploying Docker artifacts with
@@ -97,7 +97,7 @@ To run the mender-docker-lifecycle-helper-launcher script, and thus launch a Doc
 tool, run:
 
 ```bash
-wget -qO - https://raw.githubusercontent.com/rcwbr/mender-docker-lifecycle-helper/refs/tags/1.1.0/mender-docker-lifecycle-helper-launcher | bash -s -- --help
+wget -qO - https://raw.githubusercontent.com/rcwbr/mender-docker-lifecycle-helper/refs/tags/1.2.0/mender-docker-lifecycle-helper-launcher | bash -s -- --help
 ```
 
 ## mender-docker-lifecycle-helper-setup<a name="mender-docker-lifecycle-helper-setup"></a>
@@ -114,7 +114,7 @@ To run the mender-docker-lifecycle-helper-setup script, and thus launch a Docker
 tool, run the following command in the location in which the script should reside:
 
 ```bash
-wget -qO - https://raw.githubusercontent.com/rcwbr/mender-docker-lifecycle-helper/refs/tags/1.1.0/mender-docker-lifecycle-helper-setup >mender-docker-lifecycle-helper && bash mender-docker-lifecycle-helper setup
+wget -qO - https://raw.githubusercontent.com/rcwbr/mender-docker-lifecycle-helper/refs/tags/1.2.0/mender-docker-lifecycle-helper-setup >mender-docker-lifecycle-helper && bash mender-docker-lifecycle-helper setup
 ```
 
 This will download the setup script, which will unpack itself into the launcher script and the Zsh
@@ -148,7 +148,7 @@ docker run \
 	-v mender-helper-cache:/mender-helper-cache \
 	-v "$(pwd):$(pwd)" \
 	-v /var/run/docker.sock:/var/run/docker.sock \
-	ghcr.io/rcwbr/mender-docker-lifecycle-helper:1.1.0 \
+	ghcr.io/rcwbr/mender-docker-lifecycle-helper:1.2.0 \
 	--help
 ```
 
@@ -348,7 +348,7 @@ on: push
 jobs:
   mender-docker-lifecycle-helper:
     uses: 
-      rcwbr/mender-docker-lifecycle-helper/.github/workflows/mender-docker-lifecycle-helper.yaml@1.1.0
+      rcwbr/mender-docker-lifecycle-helper/.github/workflows/mender-docker-lifecycle-helper.yaml@1.2.0
     with:
       manifest-file: <path to docker-compose.yaml>
       device-type: <device type>
@@ -364,7 +364,7 @@ artifact, specify a device group to target for the deployment:
 on: push
 jobs:
   mender-docker-lifecycle-helper:
-    uses: rcwbr/mender-docker-lifecycle-helper/.github/workflows/mender-docker-lifecycle-helper.yaml@1.1.0
+    uses: rcwbr/mender-docker-lifecycle-helper/.github/workflows/mender-docker-lifecycle-helper.yaml@1.2.0
     with:
       device-group: <device group>
       ...
@@ -383,7 +383,7 @@ jobs:
   build-docker-images:
     ...
   mender-docker-lifecycle-helper:
-    uses: rcwbr/mender-docker-lifecycle-helper/.github/workflows/mender-docker-lifecycle-helper.yaml@1.1.0
+    uses: rcwbr/mender-docker-lifecycle-helper/.github/workflows/mender-docker-lifecycle-helper.yaml@1.2.0
     with:
       ...
       service-images: ${{ format('["mdlh {0}"]', fromJSON(needs.build-docker-images.outputs.mender-docker-lifecycle-helper).uv-project['image.name']) }}
@@ -400,7 +400,7 @@ jobs:
   build-docker-images:
     ...
   mender-docker-lifecycle-helper:
-    uses: rcwbr/mender-docker-lifecycle-helper/.github/workflows/mender-docker-lifecycle-helper.yaml@1.1.0
+    uses: rcwbr/mender-docker-lifecycle-helper/.github/workflows/mender-docker-lifecycle-helper.yaml@1.2.0
     with:
       ...
       service-images: ${{ github.ref_type == 'tag' && '' || format('["mdlh {0}"]', fromJSON(needs.build-docker-images.outputs.mender-docker-lifecycle-helper).uv-project['image.name']) }}
@@ -416,7 +416,7 @@ jobs:
   build-docker-images:
     ...
   mender-docker-lifecycle-helper:
-    uses: rcwbr/mender-docker-lifecycle-helper/.github/workflows/mender-docker-lifecycle-helper.yaml@1.1.0
+    uses: rcwbr/mender-docker-lifecycle-helper/.github/workflows/mender-docker-lifecycle-helper.yaml@1.2.0
     with:
       ...
       service-files: '["web /path/to/web-image.tar", "api /path/to/api-image.tar"]'
@@ -435,7 +435,7 @@ The full inputs for the workflow are as follows:
 | `platform`                  | ✓        | N/A                                                    | string | Platform with which the artifact is compatible (e.g., linux/arm/v7).                                                                 |
 | `service-files`             | ✗        | `''`                                                   | string | Image file overrides for services in the manifest_file, as a JSON array \["<service> <image file>", "<service> <image file>", ...\]. |
 | `service-images`            | ✗        | `''`                                                   | string | Image name overrides for services in the manifest_file, as a JSON array \["<service> <image>", "<service> <image>", ...\].           |
-| `helper-image`              | ✗        | `'ghcr.io/rcwbr/mender-docker-lifecycle-helper:1.1.0'` | string | Docker image to use as mender-docker-lifecycle-helper.                                                                               |
+| `helper-image`              | ✗        | `'ghcr.io/rcwbr/mender-docker-lifecycle-helper:1.2.0'` | string | Docker image to use as mender-docker-lifecycle-helper.                                                                               |
 | `secrets.mender-pat-secret` | ✓        | N/A                                                    | secret | Secret that contains the Mender server Personal Access Token to use for artifact upload and deployment.                              |
 
 ## Contributing<a name="contributing"></a>
@@ -465,7 +465,7 @@ as must values for `USER`, and `UID` (see [useradd Codespaces usage](#useradd-co
 
 By default, the devcontainer configures [pre-commit](https://pre-commit.com/) hooks in the
 repository to ensure commits pass basic testing. This includes enforcing
-[conventional commit messages](https://www.conventionalcommits.org/en/v1.1.0/) as the standard for
+[conventional commit messages](https://www.conventionalcommits.org/en/v1.2.0/) as the standard for
 this repository, via [commitlint](https://github.com/conventional-changelog/commitlint).
 
 ### CI/CD<a name="cicd"></a>
