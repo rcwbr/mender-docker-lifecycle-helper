@@ -30,8 +30,7 @@ class LifecycleHelper:
         Generate the Mender artifact for the specified metadata.
 
         :param artifact_metadata: The metadata for the artifact to generate.
-
-        :returns: The object representing the generated artifact.
+        :return: The object representing the generated artifact.
         """
         artifact_name = f"{self.context.manifest_name}-{artifact_metadata.version}"
         artifact_filename = Path(
@@ -52,8 +51,7 @@ class LifecycleHelper:
         Upload the specified artifact file to the Mender server.
 
         :param artifact: The object of the artifact to upload to the Mender server.
-
-        :returns: None
+        :return: None
         """
         with open(artifact.filename, "rb") as file_contents:
             call_mender_host_api(
@@ -73,7 +71,8 @@ class LifecycleHelper:
         """
         Issue a deployment of a pre-uploaded artifact.
 
-        :returns: None
+        :param artifact: The object of the artifact to deploy to the Mender server.
+        :return: None
         """
         deployment_name = f"{artifact.name}-{self.context.device_group}"
 
@@ -96,7 +95,7 @@ class LifecycleHelper:
         """
         Prepare the artifact, including creation, upload, and deployment as specified by provided args.
 
-        :returns: None
+        :return: None
         """
         artifact_version = None
         if self.context.release:

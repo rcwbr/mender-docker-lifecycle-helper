@@ -14,10 +14,8 @@ def call_mender_host_api(
     :param context: The context of the lifecycle helper execution.
     :param mender_endpoint: The endpoint of the Mender server to call.
     :param request_args: The args to provide to the API call.
-
-    :returns: The request response object or None.
-
-    :raises: HTTPError if the API call fails.
+    :raises HTTPError: If the API call fails.
+    :return: The request response object or None.
     """
     if context.mender_pat is None:
         context.logger.error(

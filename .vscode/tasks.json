@@ -5,6 +5,12 @@
       "label": "Pytest",
       "problemMatcher": [],
       "type": "shell"
+    },
+    {
+      "command": "mkdocs serve --dev-addr 127.0.0.1:8000 --watch ${PWD}/docs --livereload",
+      "label": "Docs",
+      "problemMatcher": [],
+      "type": "shell"
     }
   ],
   "version": "2.0.0"

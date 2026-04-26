@@ -80,6 +80,22 @@ rulesets:
               integration_id: 15368 # GitHub Actions integration ID
           # Requires PR branches to be up-to-date with target
           strict_required_status_checks_policy: true
+  - name: Docs branch rules
+    target: branch
+    enforcement: active
+    conditions:
+      ref_name:
+        include:
+          - "refs/heads/docs"
+        exclude: []
+    bypass_actors:
+      - actor_id: 3510426 # mdlh CI docs app
+        actor_type: Integration
+        bypass_mode: always
+    rules:
+      - type: creation
+      - type: deletion
+      - type: update
 
 collaborators: [] # No collaborators defined
 
@@ -88,3 +104,9 @@ environments:
     deployment_branch_policy:
       custom_branches:
         - main
+  - name: github-pages
+    deployment_branch_policy:
+      custom_branches:
+        - main
+        - name: "*"
+          type: tag

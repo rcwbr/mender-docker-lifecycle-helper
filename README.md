@@ -15,6 +15,7 @@ release deployment processes.
 <!-- mdformat-toc start --slug=github --maxlevel=6 --minlevel=1 -->
 
 - [mender-docker-lifecycle-helper](#mender-docker-lifecycle-helper)
+  - [Documentation](#documentation)
   - [Overview](#overview)
   - [mender-docker-lifecycle-helper-launcher](#mender-docker-lifecycle-helper-launcher)
     - [mender-docker-lifecycle-helper-launcher usage](#mender-docker-lifecycle-helper-launcher-usage)
@@ -41,6 +42,10 @@ release deployment processes.
     - [Settings](#settings)
 
 <!-- mdformat-toc end -->
+
+## Documentation<a name="documentation"></a>
+
+See the full documentation at https://rcwbr.github.io/mender-docker-lifecycle-helper/latest
 
 ## Overview<a name="overview"></a>
 
@@ -141,14 +146,14 @@ The environment variable inputs to the mender-docker-lifecycle-helper tool are a
 | ------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DOCKER_CONFIG_JSON`      | N/A                                                                                             | Configuration in the `~/.docker/config.json` format, used to configure and authenticate Docker operations (if provided)                                                                  |
 | `MENDER_PAT`              | N/A                                                                                             | Mender Server [Personal Access Token](https://docs.mender.io/server-integration/using-the-apis#personal-access-tokens) used to authenticate the artifact upload and deployment creation. |
-| `MENDER_HELPER_CACHE_DIR` | `${XDG_CACHE_HOME}/mender-docker-lifecycle-helper` or `~/.cache/mender-docker-lifecycle-helper` | The cache dir to which the metadata for the previously uploaded aritfact is saved. May be overridden by the `--cache-dir` flag.                                                          |
+| `MENDER_HELPER_CACHE_DIR` | `${XDG_CACHE_HOME}/mender-docker-lifecycle-helper` or `~/.cache/mender-docker-lifecycle-helper` | The cache dir to which the metadata for the previously uploaded artifact is saved. May be overridden by the `--cache-dir` flag.                                                          |
 
 The CLI flag inputs are as follows:
 
 | Flag                        | Default                                                                                                       | Effect                                                                                                                                                                                       |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-a`, `--artifact-filename` | `None`                                                                                                        | Name of the artifact file to create. Default: `<manifest-name>-<previous-version>+<current repo commit SHA>+<UUID>.mender`                                                                   |
-| `--cache-dir`               | `${XDG_CACHE_HOME}/mender-docker-lifecycle-helper` if defined, else `~/.cache/mender-docker-lifecycle-helper` | The cache dir to which the metadata for the previously uploaded aritfact is saved. Overrides the MENDER_HELPER_CACHE_DIR variable.                                                           |
+| `--cache-dir`               | `${XDG_CACHE_HOME}/mender-docker-lifecycle-helper` if defined, else `~/.cache/mender-docker-lifecycle-helper` | The cache dir to which the metadata for the previously uploaded artifact is saved. Overrides the MENDER_HELPER_CACHE_DIR variable.                                                           |
 | `--no-cache`                | `False`                                                                                                       | Skip reading previous artifact info from cache and always read from the repo at the previous version.                                                                                        |
 | `--delta`                   | `True`                                                                                                        | Generate the artifact as an update artifact, if applicable.                                                                                                                                  |
 | `--device-type`             | N/A                                                                                                           | Device type for the artifact (required).                                                                                                                                                     |

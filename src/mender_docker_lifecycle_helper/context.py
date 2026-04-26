@@ -96,10 +96,9 @@ class LifecycleHelperContext:
         """
         Determine the path use for the default helper cache dir based on the values of relevant env vars.
 
-        :param cache_dir_env_key: The env var from which to read the user-specified helper cache dir, if defined.
-        :param default_cache_dir_name: The dir name of the helper cache within general cache dir.
-
-        :returns: The path to the default helper cache dir.
+        :param cache_dir_env_key: The env var from which to read the user-specified helper cache dir, if defined, defaults to "MENDER_HELPER_CACHE_DIR"
+        :param default_cache_dir_name: The dir name of the helper cache within general cache dir, defaults to "mender-docker-lifecycle-helper"
+        :return: The path to the default helper cache dir.
         """
         return (
             Path(os.getenv(cache_dir_env_key))
@@ -117,8 +116,7 @@ class LifecycleHelperContext:
         Prepare a logger object for the helper execution at the specified level.
 
         :param log_level: The log level for the logger; must be a string matching a logging level attribute, e.g. "INFO".
-
-        :returns: A logger object.
+        :return: A logger object.
         """
         logger = logging.getLogger(__name__)
         handler = logging.StreamHandler()
@@ -134,8 +132,8 @@ class LifecycleHelperContext:
         Find the root directory of the Git repo containing the specified path.
 
         :param path: The path for which to find the containing repo.
-
-        :returns: The path to the containing Git repo.
+        :raises FileNotFoundError: If the repository root directory cannot be found.
+        :return: The path to the containing Git repo.
         """
         while path != Path("/"):
             if (path / ".git").exists():
@@ -149,8 +147,7 @@ class LifecycleHelperContext:
         Find the version of the specified repo per its version file.
 
         :param repo_dir: The path to the repository directory in which to find the version file.
-
-        :returns: The version as specified in the version file.
+        :return: The version as specified in the version file.
         """
         VERSION_FILE_NAME = "VERSION"
         with open(repo_dir / VERSION_FILE_NAME, "r") as file:
@@ -161,8 +158,7 @@ class LifecycleHelperContext:
         Prepare the cache directory for the helper execution, creating if necessary.
 
         :param cache_dir: The directory of the cache dir to use or create.
-
-        :returns: The path to the created or already existing cache dir.
+        :return: The path to the created or already existing cache dir.
         """
         if cache_dir.exists():
             self.logger.debug(f"Using existing cache dir {cache_dir}")
@@ -179,8 +175,8 @@ class LifecycleHelperContext:
         Prepare a temporary clone of the helper execution repo at the specified version.
 
         :param version: The version at which to clone the repo.
-
-        :returns: The path to the temporary clone of the repo.
+        :raises Exception: If the repository clone or checkout fails.
+        :return: The path to the temporary clone of the repo.
         """
         temp_repo_dir = Path(
             tempfile.mkdtemp(dir=(self.temp_dir if hasattr(self, "temp_dir") else None))
@@ -211,16 +207,15 @@ class LifecycleHelperContext:
         Extract the services metadata from an artifact compose manifest file.
 
         :param compose_file: The path to the compose manifest file from which to extract metadata.
-
-        :returns: The metadata of the services expressed in the compose manifest file, in the following format:
-        {
-            serviceName: {
-                image: {
-                    ref: str,
-                    hash: str
+        :return: The metadata of the services expressed in the compose manifest file, in the following format:
+            {
+                serviceName: {
+                    image: {
+                        ref: str,
+                        hash: str
+                    }
                 }
             }
-        }
         """
         with open(compose_file, "r") as f:
             compose = yaml.safe_load(f.read())
@@ -243,8 +238,8 @@ class LifecycleHelperContext:
         Determine the metadata of the previous artifact. If the cache is enabled and includes a metadata file from a previous helper execution, that data is used. If a previous version is specified, the metadata is extracted from the artifact compose manifest file at that version of the repository. If the execution is for a release, the metadata is extracted from the artifact compose manifest file at the previous (mainline) commit of the repo. Otherwise, the metadata is extracted from the artifact compose manifest file at the version of the repository as specified by the current repo version (as read from the version file).
 
         :param previous_version: If provided, the version of the helper execution repository from which to read the previous artifact metadata.
-
-        :returns: The metadata of the previous artifact, in the format as returned by _artifact_services_metadata_from_compose.
+        :raises FileNotFoundError: If the manifest file does not exist.
+        :return: The metadata of the previous artifact, in the format as returned by _artifact_services_metadata_from_compose.
         """
         if self.cache and self.cache_artifact_metadata_file.exists():
             self.logger.debug(
@@ -294,7 +289,6 @@ class LifecycleHelperContext:
 
         :param service_name: The name of the service for which to look for a matching image ref.
         :param image_ref: The ref of the image for which to look for a match.
-
         :return: The hash of the image with the provided ref.
         """
 

@@ -133,8 +133,7 @@ def cli(**args) -> None:
     Produce and deploy a Mender artifact for the MANIFEST_FILE (compose yaml) Docker application, as deltas against local cache when available or repo version context otherwise.
 
     :param args: An object of CLI args for the execution as prepared by Click decorators.
-
-    :returns: None
+    :return: None
     """
     args = SimpleNamespace(**args)
 
