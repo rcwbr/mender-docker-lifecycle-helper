@@ -351,6 +351,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#mender-docker-lifecycle-helper-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        mender-docker-lifecycle-helper-setup
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="mender-docker-lifecycle-helper-setup">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mender-docker-lifecycle-helper-setup-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        mender-docker-lifecycle-helper-setup usage
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#mender-docker-lifecycle-helper-container" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -471,6 +499,17 @@
         
       </ul>
     </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alternative-installation-via-pypi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Alternative installation via PyPi
+      
+    </span>
+  </a>
   
 </li>
         
@@ -741,6 +780,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#mender-docker-lifecycle-helper-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        mender-docker-lifecycle-helper-setup
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="mender-docker-lifecycle-helper-setup">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mender-docker-lifecycle-helper-setup-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        mender-docker-lifecycle-helper-setup usage
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#mender-docker-lifecycle-helper-container" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -861,6 +928,17 @@
         
       </ul>
     </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alternative-installation-via-pypi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Alternative installation via PyPi
+      
+    </span>
+  </a>
   
 </li>
         
@@ -1041,6 +1119,7 @@
 
 <h1 id="mender-docker-lifecycle-helper">mender-docker-lifecycle-helper<a name="mender-docker-lifecycle-helper"></a></h1>
 <p><a href="https://github.com/rcwbr/mender-docker-lifecycle-helper/releases/latest"><img alt="GitHub Release" src="https://img.shields.io/github/v/release/rcwbr/mender-docker-lifecycle-helper?logo=semver&amp;style=flat-square" /></a>
+<a href="https://pypi.org/project/mender-docker-lifecycle-helper/"><img alt="PyPI - Version" src="https://img.shields.io/pypi/v/mender-docker-lifecycle-helper?style=flat-square&amp;color=yellow" /></a>
 <a href="https://github.com/rcwbr/mender-docker-lifecycle-helper/actions/workflows/push-workflow.yaml?query=branch%3Amain"><img alt="GitHub Actions Workflow Status" src="https://img.shields.io/github/actions/workflow/status/rcwbr/mender-docker-lifecycle-helper/push-workflow.yaml?logo=github&amp;style=flat-square" /></a>
 <a href="https://codecov.io/github/rcwbr/mender-docker-lifecycle-helper"><img alt="codecov" src="https://codecov.io/github/rcwbr/mender-docker-lifecycle-helper/graph/badge.svg?token=3407T4QQ6C&amp;style=flat-square" /></a>
 <a href="https://github.com/wagoodman/dive"><img alt="Dive Docker efficiency" src="https://img.shields.io/badge/dynamic/regex?label=dive%20efficiency&amp;logo=docker&amp;logoColor=white&amp;style=flat-square&amp;url=https%3A%2F%2Fgithub.com%2Frcwbr%2Fmender-docker-lifecycle-helper%2Freleases%2Flatest%2Fdownload%2Fdive.json&amp;search=%22efficiencyScore%22%3A%20%5B0-9%5D%2B.(%5B0-9%5D%7B2%7D)(%5B0-9%5D%7B2%7D)&amp;replace=%241.%242%25" /></a>
@@ -1060,6 +1139,10 @@ release deployment processes.</p>
 <li><a href="#mender-docker-lifecycle-helper-launcher-usage">mender-docker-lifecycle-helper-launcher usage</a></li>
 </ul>
 </li>
+<li><a href="#mender-docker-lifecycle-helper-setup">mender-docker-lifecycle-helper-setup</a><ul>
+<li><a href="#mender-docker-lifecycle-helper-setup-usage">mender-docker-lifecycle-helper-setup usage</a></li>
+</ul>
+</li>
 <li><a href="#mender-docker-lifecycle-helper-container">mender-docker-lifecycle-helper container</a><ul>
 <li><a href="#mender-docker-lifecycle-helper-container-usage">mender-docker-lifecycle-helper container usage</a></li>
 </ul>
@@ -1074,6 +1157,7 @@ release deployment processes.</p>
 <li><a href="#mender-artifact-delta-artifact-conditions">mender-artifact delta artifact conditions</a></li>
 </ul>
 </li>
+<li><a href="#alternative-installation-via-pypi">Alternative installation via PyPi</a></li>
 </ul>
 </li>
 <li><a href="#mender-docker-lifecycle-helper-github-actions-workflow">mender-docker-lifecycle-helper GitHub Actions workflow</a><ul>
@@ -1132,6 +1216,24 @@ and run options. It may be used directly from this repo using <code>wget</code>:
 <p>To run the mender-docker-lifecycle-helper-launcher script, and thus launch a Docker container of the
 tool, run:</p>
 <pre><code class="language-bash">wget -qO - https://raw.githubusercontent.com/rcwbr/mender-docker-lifecycle-helper/refs/tags/1.1.0/mender-docker-lifecycle-helper-launcher | bash -s -- --help
+</code></pre>
+<h2 id="mender-docker-lifecycle-helper-setup">mender-docker-lifecycle-helper-setup<a name="mender-docker-lifecycle-helper-setup"></a></h2>
+<p>The mender-docker-lifecycle-helper-setup script sets up a local script equivalent to the
+<a href="#mender-docker-lifecycle-helper-launcher">launcher</a>, thus "installing" the tool to the CLI and
+enabling shell autocompletion (thanks to
+<a href="https://click.palletsprojects.com/en/stable/shell-completion/">Click</a>). It may be used directly
+from this repo using <code>wget</code>:</p>
+<h3 id="mender-docker-lifecycle-helper-setup-usage">mender-docker-lifecycle-helper-setup usage<a name="mender-docker-lifecycle-helper-setup-usage"></a></h3>
+<p>To run the mender-docker-lifecycle-helper-setup script, and thus launch a Docker container of the
+tool, run the following command in the location in which the script should reside:</p>
+<pre><code class="language-bash">wget -qO - https://raw.githubusercontent.com/rcwbr/mender-docker-lifecycle-helper/refs/tags/1.1.0/mender-docker-lifecycle-helper-setup &gt;mender-docker-lifecycle-helper &amp;&amp; bash mender-docker-lifecycle-helper setup
+</code></pre>
+<p>This will download the setup script, which will unpack itself into the launcher script and the Zsh
+completion script. It will prompt to add to the <code>~/.zshrc</code>:</p>
+<pre><code class="language-bash">Add the following to ~/.zshrc to complete setup:
+
+. /your/download/path/mender-docker-lifecycle-helper_comp
+export PATH=/your/download/path:$PATH
 </code></pre>
 <h2 id="mender-docker-lifecycle-helper-container">mender-docker-lifecycle-helper container<a name="mender-docker-lifecycle-helper-container"></a></h2>
 <p>The mender-docker-lifecycle-helper tool is released as a Docker image under this repo. It may be
@@ -1440,6 +1542,59 @@ table:</p>
 </tr>
 </tbody>
 </table>
+<h4 id="alternative-installation-via-pypi">Alternative installation via PyPi<a name="alternative-installation-via-pypi"></a></h4>
+<p>The mender-docker-lifecycle-helper core tool can be installed directly from PyPi using pip:</p>
+<pre><code class="language-bash">pip install mender-docker-lifecycle-helper
+</code></pre>
+<p>This method requires the following system packages to be available:</p>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Version</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>mender-artifact</td>
+<td>3.9.0</td>
+</tr>
+<tr>
+<td>jq</td>
+<td>1.6</td>
+</tr>
+<tr>
+<td>tree</td>
+<td>2.1.0</td>
+</tr>
+<tr>
+<td>xdelta3</td>
+<td>3.0.11</td>
+</tr>
+<tr>
+<td>skopeo</td>
+<td>1.22.0</td>
+</tr>
+</tbody>
+</table>
+<p>Additionally, the following configuration must be present in <code>/etc/containers/policy.json</code>:</p>
+<pre><code class="language-json">{
+  &quot;default&quot;: [
+    {
+      &quot;type&quot;: &quot;insecureAcceptAnything&quot;
+    }
+  ],
+  &quot;transports&quot;: {
+    &quot;docker-daemon&quot;: {
+      &quot;&quot;: [
+        {
+          &quot;type&quot;: &quot;insecureAcceptAnything&quot;
+        }
+      ]
+    }
+  }
+}
+</code></pre>
 <h2 id="mender-docker-lifecycle-helper-github-actions-workflow">mender-docker-lifecycle-helper GitHub Actions workflow<a name="mender-docker-lifecycle-helper-github-actions-workflow"></a></h2>
 <p>This repo provides a GitHub Actions reusable workflow to apply the
 <a href="#mender-docker-lifecycle-helper-container">containerized tool</a> via CI. It expects semantic
