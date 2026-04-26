@@ -141,3 +141,58 @@ jobs:
       service-images: ${{ github.ref_type == 'tag' && '' || format('["mdlh {0}"]', fromJSON(needs.build-docker-images.outputs.mender-docker-lifecycle-helper).uv-project['image.name']) }}
     secrets:
       mender-pat-secret: ${{ secrets.MENDER_PAT }}
+  pages:
+    # Release pages on tags and main branch
+    if: github.event_name != 'pull_request'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-24.04
+    needs: devcontainer-cache-build
+    container:
+      image: ${{ needs.devcontainer-cache-build.outputs.devcontainer-cache-image-ref }}
+      options: --user root
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      -
+        name: Authenticate as app
+        id: app-token
+        uses: actions/create-github-app-token@v2.2.1
+        with:
+          app-id: 3510426 # mdlh CI docs app
+          private-key: ${{ secrets.DOCS_GITHUB_APP_KEY }}
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          token: ${{ steps.app-token.outputs.token }}
+          ref: docs
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          token: ${{ steps.app-token.outputs.token }}
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Mike
+        run: |
+          git config --global user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git config --global user.name github-actions[bot]
+          pip install -e .
+          mike deploy --branch docs --update-aliases --push $(echo ${{ github.ref_name }} | sed 's|/|-|g')
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          ref: docs
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
+        with:
+          token: ${{ github.token }}
