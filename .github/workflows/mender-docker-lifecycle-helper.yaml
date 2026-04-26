@@ -76,7 +76,7 @@ jobs:
             --device-type ${{ inputs.device-type }} \
             ${{ matrix.delta && '--delta' || '--no-delta' }} \
             ${{ matrix.release && '--release' || '--no-release' }} \
-            ${{ inputs.device-group && format('--device-group {0}', inputs.device-group) || '' }} \
+            ${{ ( ! matrix.delta && inputs.device-group ) && format('--device-group {0}', inputs.device-group) || '' }} \
             ${{ inputs.mender-host && format('--mender-host {0}', inputs.mender-host) || '' }} \
             ${{ inputs.service-images && format('--service-image {0}', join(fromJSON(inputs.service-images), '--service-image')) || '' }} \
             ${{ inputs.service-files && format('--service-file {0}', join(fromJSON(inputs.service-files), '--service-file')) || '' }} \
