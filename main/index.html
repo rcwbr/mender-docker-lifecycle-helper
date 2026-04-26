@@ -1046,7 +1046,7 @@
 <a href="https://github.com/wagoodman/dive"><img alt="Dive Docker efficiency" src="https://img.shields.io/badge/dynamic/regex?label=dive%20efficiency&amp;logo=docker&amp;logoColor=white&amp;style=flat-square&amp;url=https%3A%2F%2Fgithub.com%2Frcwbr%2Fmender-docker-lifecycle-helper%2Freleases%2Flatest%2Fdownload%2Fdive.json&amp;search=%22efficiencyScore%22%3A%20%5B0-9%5D%2B.(%5B0-9%5D%7B2%7D)(%5B0-9%5D%7B2%7D)&amp;replace=%241.%242%25" /></a>
 <a href="https://github.com/pre-commit/pre-commit"><img alt="pre-commit" src="https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&amp;logoColor=white&amp;style=flat-square" /></a>
 <a href="https://commitlint.js.org/"><img alt="Commitlint" src="https://img.shields.io/badge/commitlint-enabled-navy?style=flat-square&amp;logo=commitlint&amp;logoColor=white" /></a>
-<a href="https://www.conventionalcommits.org/en/v1.0.5/"><img alt="Conventional Commits" src="https://img.shields.io/badge/conventional_commits-compliant-pink?style=flat-square&amp;logo=conventionalcommits&amp;logoColor=white" /></a>
+<a href="https://www.conventionalcommits.org/en/v1.0.6/"><img alt="Conventional Commits" src="https://img.shields.io/badge/conventional_commits-compliant-pink?style=flat-square&amp;logo=conventionalcommits&amp;logoColor=white" /></a>
 <a href="https://github.com/psf/black?tab=readme-ov-file"><img alt="Python Black" src="https://img.shields.io/badge/code_style-black-black?style=flat-square&amp;logo=black&amp;logoColor=white" /></a></p>
 <p>Management tool for Mender Docker application workloads in local and CI development iteration and
 release deployment processes.</p>
@@ -1131,7 +1131,7 @@ and run options. It may be used directly from this repo using <code>wget</code>:
 <h3 id="mender-docker-lifecycle-helper-launcher-usage">mender-docker-lifecycle-helper-launcher usage<a name="mender-docker-lifecycle-helper-launcher-usage"></a></h3>
 <p>To run the mender-docker-lifecycle-helper-launcher script, and thus launch a Docker container of the
 tool, run:</p>
-<pre><code class="language-bash">wget -qO - https://raw.githubusercontent.com/rcwbr/mender-docker-lifecycle-helper/refs/tags/1.0.5/mender-docker-lifecycle-helper-launcher | bash -s -- --help
+<pre><code class="language-bash">wget -qO - https://raw.githubusercontent.com/rcwbr/mender-docker-lifecycle-helper/refs/tags/1.0.6/mender-docker-lifecycle-helper-launcher | bash -s -- --help
 </code></pre>
 <h2 id="mender-docker-lifecycle-helper-container">mender-docker-lifecycle-helper container<a name="mender-docker-lifecycle-helper-container"></a></h2>
 <p>The mender-docker-lifecycle-helper tool is released as a Docker image under this repo. It may be
@@ -1149,7 +1149,7 @@ launched directly as a container, as opposed to likewise via
     -v mender-helper-cache:/mender-helper-cache \
     -v &quot;$(pwd):$(pwd)&quot; \
     -v /var/run/docker.sock:/var/run/docker.sock \
-    ghcr.io/rcwbr/mender-docker-lifecycle-helper:1.0.5 \
+    ghcr.io/rcwbr/mender-docker-lifecycle-helper:1.0.6 \
     --help
 </code></pre>
 <h2 id="mender-docker-lifecycle-helper-core">mender-docker-lifecycle-helper core<a name="mender-docker-lifecycle-helper-core"></a></h2>
@@ -1466,7 +1466,7 @@ New repository secret, and paste as the secret value. The name of the secret mus
 jobs:
   mender-docker-lifecycle-helper:
     uses: 
-      rcwbr/mender-docker-lifecycle-helper/.github/workflows/mender-docker-lifecycle-helper.yaml@1.0.5
+      rcwbr/mender-docker-lifecycle-helper/.github/workflows/mender-docker-lifecycle-helper.yaml@1.0.6
     with:
       manifest-file: &lt;path to docker-compose.yaml&gt;
       device-type: &lt;device type&gt;
@@ -1479,7 +1479,7 @@ artifact, specify a device group to target for the deployment:</p>
 <pre><code class="language-yaml">on: push
 jobs:
   mender-docker-lifecycle-helper:
-    uses: rcwbr/mender-docker-lifecycle-helper/.github/workflows/mender-docker-lifecycle-helper.yaml@1.0.5
+    uses: rcwbr/mender-docker-lifecycle-helper/.github/workflows/mender-docker-lifecycle-helper.yaml@1.0.6
     with:
       device-group: &lt;device group&gt;
       ...
@@ -1495,7 +1495,7 @@ jobs:
   build-docker-images:
     ...
   mender-docker-lifecycle-helper:
-    uses: rcwbr/mender-docker-lifecycle-helper/.github/workflows/mender-docker-lifecycle-helper.yaml@1.0.5
+    uses: rcwbr/mender-docker-lifecycle-helper/.github/workflows/mender-docker-lifecycle-helper.yaml@1.0.6
     with:
       ...
       service-images: ${{ format('[&quot;mdlh {0}&quot;]', fromJSON(needs.build-docker-images.outputs.mender-docker-lifecycle-helper).uv-project['image.name']) }}
@@ -1509,7 +1509,7 @@ jobs:
   build-docker-images:
     ...
   mender-docker-lifecycle-helper:
-    uses: rcwbr/mender-docker-lifecycle-helper/.github/workflows/mender-docker-lifecycle-helper.yaml@1.0.5
+    uses: rcwbr/mender-docker-lifecycle-helper/.github/workflows/mender-docker-lifecycle-helper.yaml@1.0.6
     with:
       ...
       service-images: ${{ github.ref_type == 'tag' &amp;&amp; '' || format('[&quot;mdlh {0}&quot;]', fromJSON(needs.build-docker-images.outputs.mender-docker-lifecycle-helper).uv-project['image.name']) }}
@@ -1522,7 +1522,7 @@ jobs:
   build-docker-images:
     ...
   mender-docker-lifecycle-helper:
-    uses: rcwbr/mender-docker-lifecycle-helper/.github/workflows/mender-docker-lifecycle-helper.yaml@1.0.5
+    uses: rcwbr/mender-docker-lifecycle-helper/.github/workflows/mender-docker-lifecycle-helper.yaml@1.0.6
     with:
       ...
       service-files: '[&quot;web /path/to/web-image.tar&quot;, &quot;api /path/to/api-image.tar&quot;]'
@@ -1592,7 +1592,7 @@ jobs:
 <tr>
 <td><code>helper-image</code></td>
 <td>✗</td>
-<td><code>'ghcr.io/rcwbr/mender-docker-lifecycle-helper:1.0.5'</code></td>
+<td><code>'ghcr.io/rcwbr/mender-docker-lifecycle-helper:1.0.6'</code></td>
 <td>string</td>
 <td>Docker image to use as mender-docker-lifecycle-helper.</td>
 </tr>
@@ -1624,7 +1624,7 @@ as must values for <code>USER</code>, and <code>UID</code> (see <a href="#userad
 <h4 id="devcontainer-pre-commit-usage">devcontainer pre-commit usage<a name="devcontainer-pre-commit-usage"></a></h4>
 <p>By default, the devcontainer configures <a href="https://pre-commit.com/">pre-commit</a> hooks in the
 repository to ensure commits pass basic testing. This includes enforcing
-<a href="https://www.conventionalcommits.org/en/v1.0.5/">conventional commit messages</a> as the standard for
+<a href="https://www.conventionalcommits.org/en/v1.0.6/">conventional commit messages</a> as the standard for
 this repository, via <a href="https://github.com/conventional-changelog/commitlint">commitlint</a>.</p>
 <h3 id="cicd">CI/CD<a name="cicd"></a></h3>
 <p>This repo uses the <a href="https://github.com/rcwbr/release-it-gh-workflow">release-it-gh-workflow</a>, with
