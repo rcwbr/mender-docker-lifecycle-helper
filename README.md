@@ -29,6 +29,7 @@ release deployment processes.
       - [mender-docker-lifecycle-helper - mender-artifact contexts](#mender-docker-lifecycle-helper---mender-artifact-contexts)
         - [mender-artifact previous version conditions](#mender-artifact-previous-version-conditions)
         - [mender-artifact delta artifact conditions](#mender-artifact-delta-artifact-conditions)
+      - [Alternative installation via PyPi](#alternative-installation-via-pypi)
   - [mender-docker-lifecycle-helper GitHub Actions workflow](#mender-docker-lifecycle-helper-github-actions-workflow)
     - [mender-docker-lifecycle-helper GitHub Actions workflow usage](#mender-docker-lifecycle-helper-github-actions-workflow-usage)
       - [mender-docker-lifecycle-helper GitHub Actions workflow inputs](#mender-docker-lifecycle-helper-github-actions-workflow-inputs)
@@ -244,6 +245,45 @@ table:
 | The image hash in each `<images>/sums-current.txt` belongs to the services defined in this version of the Compose file | Latest cache state (same as current repo state)                                       | Latest cache state                                                                    | Repo state at [previous version](#mender-artifact-previous-version-conditions)        |
 | The image ref in each `<images>/url-current.txt` belongs to the services defined in this version of the Compose file   | Latest cache state (same as current repo state)                                       | Latest cache state                                                                    | Repo state at [previous version](#mender-artifact-previous-version-conditions)        |
 | `--depends rootfs-image.<repo name><manifest name>.version:` version ID                                                | Cache previous artifact version ID                                                    | Cache previous artifact version ID                                                    | [Previous version](#mender-artifact-previous-version-conditions)                      |
+
+#### Alternative installation via PyPi<a name="alternative-installation-via-pypi"></a>
+
+The mender-docker-lifecycle-helper core tool can be installed directly from PyPi using pip:
+
+```bash
+pip install mender-docker-lifecycle-helper
+```
+
+This method requires the following system packages to be available:
+
+| Package         | Version |
+| --------------- | ------- |
+| mender-artifact | 3.9.0   |
+| jq              | 1.6     |
+| tree            | 2.1.0   |
+| xdelta3         | 3.0.11  |
+| skopeo          | 1.22.0  |
+
+Additionally, the following configuration must be present in `/etc/containers/policy.json`:
+
+```json
+{
+  "default": [
+    {
+      "type": "insecureAcceptAnything"
+    }
+  ],
+  "transports": {
+    "docker-daemon": {
+      "": [
+        {
+          "type": "insecureAcceptAnything"
+        }
+      ]
+    }
+  }
+}
+```
 
 ## mender-docker-lifecycle-helper GitHub Actions workflow<a name="mender-docker-lifecycle-helper-github-actions-workflow"></a>
 
