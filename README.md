@@ -15,6 +15,7 @@ release deployment processes.
 <!-- mdformat-toc start --slug=github --maxlevel=6 --minlevel=1 -->
 
 - [mender-docker-lifecycle-helper](#mender-docker-lifecycle-helper)
+  - [Documentation](#documentation)
   - [Overview](#overview)
   - [mender-docker-lifecycle-helper-launcher](#mender-docker-lifecycle-helper-launcher)
     - [mender-docker-lifecycle-helper-launcher usage](#mender-docker-lifecycle-helper-launcher-usage)
@@ -41,6 +42,10 @@ release deployment processes.
     - [Settings](#settings)
 
 <!-- mdformat-toc end -->
+
+## Documentation<a name="documentation"></a>
+
+See the full documentation at https://rcwbr.github.io/mender-docker-lifecycle-helper/latest
 
 ## Overview<a name="overview"></a>
 
