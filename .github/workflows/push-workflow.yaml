@@ -172,6 +172,8 @@ jobs:
         uses: actions/configure-pages@v5
       - name: Mike
         run: |
+          git checkout docs
+          git checkout ${{ github.ref_name }}
           git config --global user.email 41898282+github-actions[bot]@users.noreply.github.com
           git config --global user.name github-actions[bot]
           pip install -e .
