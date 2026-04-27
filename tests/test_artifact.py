@@ -45,7 +45,7 @@ class LifecycleHelperContextMock:
             version="0.1.0",
         )
         self.version = "1.0.0"
-
+        self.platform = "linux/amd64"
         self.delta = True
 
 
@@ -193,7 +193,7 @@ class TestPrepImages:
             version="1.0.0",
         )
         context_mock.logger = MagicMock()
-        context_mock.platform = "linux"
+        context_mock.platform = "linux/amd64"
         context_mock.cache_dir = tmp_path / "cache"
         context_mock.image_cache = MagicMock()
 
@@ -284,7 +284,7 @@ class TestPrepArtifactDir:
                 version="1.0.0",
             ),
             manifest_name="test",
-            platform="linux",
+            platform="linux/amd64",
             delta=True,
             manifest_file=(tmp_path / "docker-compose.yml"),
             manifest={"services": {"serviceA": {"image": "busybox:1.37.0-musl"}}},
@@ -320,8 +320,7 @@ class TestPrepArtifactDir:
             metadata = json.load(f)
         assert metadata["application_name"] == "test"
         assert metadata["orchestrator"] == "docker-compose"
-        assert metadata["platform"] == "linux"
-        assert metadata["version"] == "0.0.0"
+        assert metadata["platform"] == "linux/amd64"
         assert len(metadata["images"]) == 1
 
         # Verify images archive exists and has correct structure
@@ -374,7 +373,7 @@ class TestGenArtifact:
             manifest_name="test",
             manifest_file=(tmp_path / "docker-compose.yml"),
             manifest={"services": {"serviceA": {"image": "busybox:1.37.0-musl"}}},
-            platform="linux",
+            platform="linux/amd64",
             previous_artifact_metadata=SimpleNamespace(
                 version="1.0.0",
                 services={
@@ -435,7 +434,7 @@ class TestGenArtifact:
         ).read_text() == '{"payloads":[{"type":"app"}],"artifact_provides":{"artifact_name":"test"},"artifact_depends":{"device_type":["virtual"]}}'
         assert (
             header_extract_dir / "headers" / "0000" / "meta-data"
-        ).read_text() == '{"application_name":"test","images":["19b646668802469d968a05342a601e78da4322a414a7c09b1c9ee25165042138"],"orchestrator":"docker-compose","platform":"linux","version":"2.0.0"}'
+        ).read_text() == '{"application_name":"test","images":["19b646668802469d968a05342a601e78da4322a414a7c09b1c9ee25165042138"],"orchestrator":"docker-compose","platform":"linux/amd64","version":"2.0.0"}'
         assert (
             header_extract_dir / "headers" / "0000" / "type-info"
         ).read_text() == '{"type":"app","artifact_depends":{"rootfs-image.test.version":"1.0.0"},"artifact_provides":{"rootfs-image.test.version":"2.0.0"},"clears_artifact_provides":["rootfs-image.test.*"]}'
@@ -457,7 +456,7 @@ class TestGenArtifact:
                     }
                 }
             },
-            platform="linux",
+            platform="linux/amd64",
         )
         artifact_file = Path(tmp_path / "artifact1.mender")
         helper_artifact = LifecycleHelperArtifact(

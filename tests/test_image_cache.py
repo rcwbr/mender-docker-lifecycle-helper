@@ -111,7 +111,9 @@ class TestImageCacheDelta:
         cache = ImageCache(tmp_path)
 
         result = cache.delta(
-            {"ref": "from-image", "hash": "hash1"}, {"ref": "to-image", "hash": "hash2"}
+            {"ref": "from-image", "hash": "hash1"},
+            {"ref": "to-image", "hash": "hash2"},
+            "linux/amd64",
         )
         assert result == delta_file
 
@@ -134,12 +136,15 @@ class TestImageCacheDelta:
             mock_return_path = (
                 tmp_path / "delta" / "from_hash" / "to_hash" / "image.img"
             )
+            mock_return_path.parent.mkdir(parents=True)
+            mock_return_path.touch()
             mock_oci_deep_delta.return_value = mock_return_path
 
             # Call delta method
             result = cache.delta(
                 {"ref": "from-image", "hash": "from_hash"},
                 {"ref": "to-image", "hash": "to_hash"},
+                "linux/amd64",
             )
 
             # Verify oci_deep_delta was called with correct parameters
@@ -155,6 +160,7 @@ class TestImageCacheDelta:
 
             # Check that the fourth arg is the image file name
             assert args[3] == "image.img"
+            assert args[4] == "linux/amd64"
 
             # Verify the result is what we mocked
             assert result == mock_return_path
@@ -183,6 +189,7 @@ class TestImageCacheDelta:
             result1 = cache.delta(
                 {"ref": "from-image", "hash": "from_hash"},
                 {"ref": "to-image", "hash": "to_hash"},
+                "linux/amd64",
             )
             assert result1 == mock_return_path
             assert mock_oci.call_count == 1
@@ -191,6 +198,7 @@ class TestImageCacheDelta:
             result2 = cache.delta(
                 {"ref": "from-image", "hash": "from_hash"},
                 {"ref": "to-image", "hash": "to_hash"},
+                "linux/amd64",
             )
             assert result2 == mock_return_path
             assert mock_oci.call_count == 1
@@ -450,12 +458,12 @@ class TestImageCacheExtractCacheImage:
         )
 
         # Mock save_image_to_file to copy the dummy tar in place of pulling from docker
-        def mock_save_image_to_file(image_dict, save_file):
-            shutil.copy(tar_path, save_file)
+        def fake_save_image_to_file(image, file):
+            shutil.copy(tar_path, file)
 
         monkeypatch.setattr(
             "mender_docker_lifecycle_helper.utils.image_cache.save_image_to_file",
-            mock_save_image_to_file,
+            fake_save_image_to_file,
         )
 
         cache = ImageCache(tmp_path)

@@ -60,12 +60,204 @@ class TestReadLayersFromManifest:
             manifest_file.write_text(json.dumps(manifest_data))
 
             # Call function
-            layers = _read_layers_from_manifest(test_dir)
+            layers = _read_layers_from_manifest(test_dir, "linux/amd64")
 
             # Assertions
             assert len(layers) == 2
             assert layers[0] == blobs_dir / "layer1234567890abcdef"
             assert layers[1] == blobs_dir / "fedcba0987654321"
+
+    def test_read_layers_from_manifest_multi_platform(self):
+        """Test _read_layers_from_manifest handles multi-platform images correctly."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            test_dir = Path(tmp_dir) / "test-image"
+            blobs_dir = test_dir / "blobs" / "sha256"
+            blobs_dir.mkdir(parents=True)
+
+            # index.json points to an intermediate manifest (multi-platform index)
+            index_data = {
+                "schemaVersion": 2,
+                "manifests": [
+                    {
+                        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                        "digest": "sha256:intermediate_manifest",
+                    },
+                ],
+            }
+            index_file = test_dir / "index.json"
+            index_file.write_text(json.dumps(index_data))
+
+            # Intermediate manifest contains platform-specific manifests
+            intermediate_manifest = {
+                "schemaVersion": 2,
+                "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                "manifests": [
+                    {
+                        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                        "digest": "sha256:manifest_amd64",
+                        "platform": {"os": "linux", "architecture": "amd64"},
+                    },
+                    {
+                        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                        "digest": "sha256:manifest_arm64",
+                        "platform": {"os": "linux", "architecture": "arm64"},
+                    },
+                ],
+            }
+            (blobs_dir / "intermediate_manifest").write_text(
+                json.dumps(intermediate_manifest)
+            )
+
+            amd64_manifest = {
+                "schemaVersion": 2,
+                "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                "layers": [
+                    {
+                        "digest": "sha256:amd64_layer1",
+                        "size": 1000,
+                        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                    },
+                ],
+            }
+            (blobs_dir / "manifest_amd64").write_text(json.dumps(amd64_manifest))
+
+            arm64_manifest = {
+                "schemaVersion": 2,
+                "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                "layers": [
+                    {
+                        "digest": "sha256:arm64_layer1",
+                        "size": 1000,
+                        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                    },
+                ],
+            }
+            (blobs_dir / "manifest_arm64").write_text(json.dumps(arm64_manifest))
+
+            layers = _read_layers_from_manifest(test_dir, "linux/amd64")
+            assert len(layers) == 1
+            assert layers[0] == blobs_dir / "amd64_layer1"
+
+            layers = _read_layers_from_manifest(test_dir, "linux/arm64")
+            assert len(layers) == 1
+            assert layers[0] == blobs_dir / "arm64_layer1"
+
+    def test_read_layers_from_manifest_multi_platform_with_variant(self):
+        """Test _read_layers_from_manifest handles multi-platform images with variant."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            test_dir = Path(tmp_dir) / "test-image"
+            blobs_dir = test_dir / "blobs" / "sha256"
+            blobs_dir.mkdir(parents=True)
+
+            # index.json points to an intermediate manifest (multi-platform index)
+            index_data = {
+                "schemaVersion": 2,
+                "manifests": [
+                    {
+                        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                        "digest": "sha256:intermediate_manifest",
+                    },
+                ],
+            }
+            index_file = test_dir / "index.json"
+            index_file.write_text(json.dumps(index_data))
+
+            # Intermediate manifest contains platform-specific manifests with variants
+            intermediate_manifest = {
+                "schemaVersion": 2,
+                "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                "manifests": [
+                    {
+                        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                        "digest": "sha256:manifest_arm64_v8",
+                        "platform": {
+                            "os": "linux",
+                            "architecture": "arm64",
+                            "variant": "v8",
+                        },
+                    },
+                    {
+                        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                        "digest": "sha256:manifest_arm64_v7",
+                        "platform": {
+                            "os": "linux",
+                            "architecture": "arm64",
+                            "variant": "v7",
+                        },
+                    },
+                ],
+            }
+            (blobs_dir / "intermediate_manifest").write_text(
+                json.dumps(intermediate_manifest)
+            )
+
+            v8_manifest = {
+                "schemaVersion": 2,
+                "layers": [
+                    {
+                        "digest": "sha256:v8_layer1",
+                        "size": 1000,
+                        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                    },
+                ],
+            }
+            (blobs_dir / "manifest_arm64_v8").write_text(json.dumps(v8_manifest))
+
+            v7_manifest = {
+                "schemaVersion": 2,
+                "layers": [
+                    {
+                        "digest": "sha256:v7_layer1",
+                        "size": 1000,
+                        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                    },
+                ],
+            }
+            (blobs_dir / "manifest_arm64_v7").write_text(json.dumps(v7_manifest))
+
+            layers = _read_layers_from_manifest(test_dir, "linux/arm64/v8")
+            assert len(layers) == 1
+            assert layers[0] == blobs_dir / "v8_layer1"
+
+            layers = _read_layers_from_manifest(test_dir, "linux/arm64/v7")
+            assert len(layers) == 1
+            assert layers[0] == blobs_dir / "v7_layer1"
+
+    def test_read_layers_from_manifest_multi_platform_no_match(self):
+        """Test _read_layers_from_manifest uses first manifest if no platform match."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            test_dir = Path(tmp_dir) / "test-image"
+            blobs_dir = test_dir / "blobs" / "sha256"
+            blobs_dir.mkdir(parents=True)
+
+            index_data = {
+                "schemaVersion": 2,
+                "manifests": [
+                    {
+                        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                        "digest": "sha256:manifest_amd64",
+                        "platform": {"os": "linux", "architecture": "amd64"},
+                    },
+                ],
+            }
+            index_file = test_dir / "index.json"
+            index_file.write_text(json.dumps(index_data))
+
+            amd64_manifest = {
+                "schemaVersion": 2,
+                "layers": [
+                    {
+                        "digest": "sha256:amd64_layer1",
+                        "size": 1000,
+                        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                    },
+                ],
+            }
+            (blobs_dir / "manifest_amd64").write_text(json.dumps(amd64_manifest))
+
+            layers = _read_layers_from_manifest(test_dir, "linux/nonexistent")
+            assert len(layers) == 1
+            assert layers[0] == blobs_dir / "amd64_layer1"
 
 
 class TestOCIDeepDelta:
@@ -119,12 +311,13 @@ class TestOCIDeepDelta:
                 mock_tar_instance = MagicMock()
                 mock_tarfile.return_value.__enter__.return_value = mock_tar_instance
 
-                # Call function
-                delta_filename = "test-delta.tar"
-                result = oci_deep_delta(from_dir, to_dir, delta_dir, delta_filename)
+                result = oci_deep_delta(
+                    from_dir, to_dir, delta_dir, "test-delta.tar", "linux/amd64"
+                )
 
-                # Assertions
                 assert mock_read_layers.call_count == 2
+                for call in mock_read_layers.call_args_list:
+                    assert call[0][1] == "linux/amd64"
 
                 # Should call subprocess.run for each layer pair (2 calls since from_layers has 2 items)
                 assert mock_subprocess.call_count == 2
@@ -157,11 +350,12 @@ class TestOCIDeepDelta:
             from_dir = Path("/fake/from")
             to_dir = Path("/fake/to")
             delta_dir = Path("/fake/delta")
-            delta_filename = "test-delta.tar"
 
             # Should raise ImageDeltaException
             with pytest.raises(ImageDeltaException) as exc_info:
-                oci_deep_delta(from_dir, to_dir, delta_dir, delta_filename)
+                oci_deep_delta(
+                    from_dir, to_dir, delta_dir, "test-delta.tar", "linux/amd64"
+                )
 
             assert "source image has more layers than the new one" in str(
                 exc_info.value
@@ -208,9 +402,14 @@ class TestOCIDeepDelta:
                 error.stderr = "xdelta3 failed"
                 mock_subprocess.side_effect = error
 
-                # Should propagate the subprocess error
                 with pytest.raises(subprocess.SubprocessError) as exc_info:
-                    oci_deep_delta(from_dir, to_dir, delta_dir, "test-delta.tar")
+                    oci_deep_delta(
+                        from_dir,
+                        to_dir,
+                        delta_dir,
+                        "test-delta.tar",
+                        "linux/amd64",
+                    )
 
                 assert "xdelta3 failed" in str(exc_info.value)
 
@@ -268,7 +467,13 @@ class TestOCIDeepDelta:
 
                 # Should propagate the subprocess error via our manual check
                 with pytest.raises(subprocess.SubprocessError) as exc_info:
-                    oci_deep_delta(from_dir, to_dir, delta_dir, "test-delta.tar")
+                    oci_deep_delta(
+                        from_dir,
+                        to_dir,
+                        delta_dir,
+                        "test-delta.tar",
+                        "linux/amd64",
+                    )
 
                 assert "xdelta3 failed" in str(exc_info.value)
 
@@ -319,7 +524,8 @@ class TestOCIDeepDelta:
                     from_dir,
                     to_dir,
                     delta_dir,
-                    delta_filename,
+                    "test-delta.tar",
+                    "linux/amd64",
                     delta_cmd=custom_delta_cmd,
                 )
 
@@ -330,6 +536,9 @@ class TestOCIDeepDelta:
                 assert args[0][: len(custom_delta_cmd)] == custom_delta_cmd
                 assert kwargs["capture_output"] is True
                 assert kwargs["check"] is True
+
+                for call in mock_read_layers.call_args_list:
+                    assert call[0][1] == "linux/amd64"
 
 
 class TestDeepDeltaIntegration:
@@ -350,7 +559,7 @@ class TestDeepDeltaIntegration:
         # Generate delta file - this will pull images and extract them
         from_image = {"ref": "busybox:1.37.0-glibc", "hash": from_hash}
         to_image = {"ref": "busybox:1.37.0-musl", "hash": to_hash}
-        delta_file = cache.delta(from_image, to_image)
+        delta_file = cache.delta(from_image, to_image, "linux/amd64")
 
         # Verify delta file was created with correct contents
         extract_dir = tmp_path / "delta_extract"
