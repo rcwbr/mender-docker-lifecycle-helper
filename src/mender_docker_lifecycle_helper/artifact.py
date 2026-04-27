@@ -112,7 +112,9 @@ class LifecycleHelperArtifact:
         ]
         (artifact_image_prep_dir / DEEP_DELTA_FILENAME).touch()
         # Ensure images for delta are extracted in the cache
-        image_delta_file = self.context.image_cache.delta(previous_image, service_image)
+        image_delta_file = self.context.image_cache.delta(
+            previous_image, service_image, self.context.platform
+        )
         (artifact_image_prep_dir / IMAGE_FILE_NAME).symlink_to(image_delta_file)
         (artifact_image_prep_dir / "sums-current.txt").write_text(
             previous_image["hash"]

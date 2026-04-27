@@ -75,12 +75,15 @@ class ImageCache:
             if hash_dir.is_dir()
         }
 
-    def delta(self, from_image: dict[str, str], to_image: dict[str, str]) -> Path:
+    def delta(
+        self, from_image: dict[str, str], to_image: dict[str, str], target_platform: str
+    ) -> Path:
         """
         Get the delta file path for a given from and to image hash, creating folders if required.
 
         :param from_image: The metadata (specifically {ref: <ref>, hash: <hash>}) of the image from which the delta is defined.
         :param to_image: The metadata (specifically {ref: <ref>, hash: <hash>}) of the image to which the delta is defined.
+        :param target_platform: The platform to target, if the image contains multiple, as os/[architecture]/[variant].
         :return: The path to the delta file for the given from and to image hash.
         """
         from_hash = from_image["hash"]
@@ -104,6 +107,8 @@ class ImageCache:
                 self.extract_cache_image(to_image),
                 delta_dir,
                 self.image_file_name,
+                target_platform,
+                logger=self.logger,
             )
             if from_hash not in self.delta_cache:
                 self.delta_cache[from_hash] = {}

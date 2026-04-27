@@ -20,12 +20,15 @@ class ImageDeltaException(Exception):
 
 
 def _read_layers_from_manifest(
-    image_dir: Path, logger: Optional[logging.Logger] = logging.getLogger(__name__)
+    image_dir: Path,
+    target_platform: str,
+    logger: Optional[logging.Logger] = logging.getLogger(__name__),
 ) -> list[Path]:
     """
     Reads the layers from an OCI image manifest file.
 
     :param image_dir: The directory in which the image is extracted.
+    :param target_platform: The platform to target, if the image contains multiple, as os/[architecture]/[variant].
     :param logger: A logger with which to log steps of function processes, defaults to logging.getLogger(__name__).
     :return: The list of paths to the layers referenced by the image manifest.
     """
@@ -44,6 +47,27 @@ def _read_layers_from_manifest(
     with open(blobs_dir / manifest_hash) as manifest_file:
         manifest = json.load(manifest_file)
 
+    # Multi-platform images may have multiple levels of manifests from the index.
+    if "layers" not in manifest and "manifests" in manifest:
+        logger.debug(
+            "Multi-platform image detected, looking for matching platform manifest..."
+        )
+        for platform_manifest in manifest["manifests"]:
+            platform_values = target_platform.split("/")
+            platform_fields = ["os", "architecture", "variant"]
+            if all(
+                platform_manifest["platform"].get(platform_field) == platform_value
+                for platform_field, platform_value in zip(
+                    platform_fields, platform_values
+                )
+            ):
+                logger.debug("Matching platform found!")
+                with open(
+                    blobs_dir
+                    / platform_manifest["digest"].removeprefix(f"{HASH_PREFIX}:")
+                ) as manifest_file:
+                    manifest = json.load(manifest_file)
+
     layers = [
         blobs_dir / layer["digest"].removeprefix(f"{HASH_PREFIX}:")
         for layer in manifest["layers"]
@@ -56,6 +80,7 @@ def oci_deep_delta(
     to_dir: Path,
     delta_dir: Path,
     delta_filename: str,
+    target_platform: str,
     delta_cmd: Optional[list[str]] = XDELTA_CMD,
     logger: Optional[logging.Logger] = logging.getLogger(__name__),
 ) -> Path:
@@ -69,15 +94,16 @@ def oci_deep_delta(
     :param delta_dir: The path under which to create the delta layers.
     :param delta_filename: The name of the delta image archive file to create.
     :param delta_cmd: The command to use for layer delta generation, defaults to XDELTA_CMD.
+    :param target_platform: The platform to target, if the image contains multiple, as os/[architecture]/[variant].
     :param logger: A logger with which to log steps of function processes, defaults to logging.getLogger(__name__).
     :raises ImageDeltaException: If images contain different numbers of layers.
     :return: The image delta file.
     """
     # Load layers from current image manifest
-    from_layers = _read_layers_from_manifest(from_dir)
+    from_layers = _read_layers_from_manifest(from_dir, target_platform, logger)
 
     # Load layers from new image manifest
-    to_layers = _read_layers_from_manifest(to_dir)
+    to_layers = _read_layers_from_manifest(to_dir, target_platform, logger)
 
     # Check if current image has more layers than new image
     if len(from_layers) > len(to_layers):
