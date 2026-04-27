@@ -35,7 +35,7 @@ on:
         type: string
       helper-image:
         description: Docker image to use as mender-docker-lifecycle-helper.
-        default: 'ghcr.io/rcwbr/mender-docker-lifecycle-helper:1.2.1'
+        default: 'ghcr.io/rcwbr/mender-docker-lifecycle-helper:1.2.2'
         required: false
         type: string
     secrets:
