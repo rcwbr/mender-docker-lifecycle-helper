@@ -404,6 +404,32 @@ class TestImageCacheExtractCacheFile:
         save_image_path = tmp_path / "save" / "sha256content123" / "image.img"
         assert save_image_path.exists()
 
+    def test_extract_cache_file_strips_sha256_prefix(self, tmp_path):
+        """Test that sha256: prefix is stripped from digest in returned metadata and cache keys."""
+        tar_path = _create_oci_tar(
+            tmp_path, image_name="prefix-test-image", digest="sha256:abc123def"
+        )
+
+        cache = ImageCache(tmp_path)
+
+        result = cache.extract_cache_file(tar_path)
+
+        # Verify the sha256: prefix is stripped in the returned metadata
+        assert result["hash"] == "abc123def"
+        assert "sha256:" not in result["hash"]
+
+        # Verify the extract cache uses the stripped hash as key
+        assert "abc123def" in cache.extract_cache
+        assert cache.extract_cache["abc123def"].is_dir()
+
+        # Verify the save cache uses the stripped hash as key
+        assert "abc123def" in cache.save_cache
+        assert cache.save_cache["abc123def"].exists()
+
+        # Verify the actual directory names don't have the prefix
+        assert (tmp_path / "extract" / "abc123def").is_dir()
+        assert (tmp_path / "save" / "abc123def" / "image.img").exists()
+
 
 class TestImageCacheExtractCacheImage:
     """Tests for ImageCache.extract_cache_image method."""
