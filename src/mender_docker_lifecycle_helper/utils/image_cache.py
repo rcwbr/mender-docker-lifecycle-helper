@@ -6,7 +6,10 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-from mender_docker_lifecycle_helper.utils.container_utils import save_image_to_file
+from mender_docker_lifecycle_helper.utils.container_utils import (
+    HASH_PREFIX,
+    save_image_to_file,
+)
 from mender_docker_lifecycle_helper.utils.deep_delta import oci_deep_delta
 
 DELTA_CACHE_DIRNAME = "delta"
@@ -165,6 +168,8 @@ class ImageCache:
                 "io.containerd.image.name", None
             )
             image_hash = image_manifest.get("digest", None)
+            if image_hash is not None:
+                image_hash = image_hash.removeprefix(f"{HASH_PREFIX}:")
             if image_ref is None:
                 raise ImageDirFormatException(
                     f"{extract_file} as extracted to {temp_extract_dir} does not contain expected io.containerd.image.name metadata in its index."
