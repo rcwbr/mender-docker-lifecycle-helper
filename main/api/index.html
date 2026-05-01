@@ -6563,9 +6563,24 @@
       <a href="#mender_docker_lifecycle_helper.artifact"><code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;artifact</a>
   </span>
 
-            <span class="doc doc-backlink-crumb last">
+            <span class="doc doc-backlink-crumb">
       <a href="#mender_docker_lifecycle_helper.artifact.LifecycleHelperArtifact"><code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;LifecycleHelperArtifact</a>
   </span>
+
+            <ul class="doc doc-backlink-list">
+      <li class="doc doc-backlink">
+            <span class="doc doc-backlink-crumb last">
+      <a href="#mender_docker_lifecycle_helper.artifact.LifecycleHelperArtifact.call_mender_artifact"><code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;call_mender_artifact</a>
+  </span>
+
+      </li>
+      <li class="doc doc-backlink">
+            <span class="doc doc-backlink-crumb last">
+      <a href="#mender_docker_lifecycle_helper.artifact.LifecycleHelperArtifact.gen_artifact_services"><code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;gen_artifact_services</a>
+  </span>
+
+      </li>
+  </ul>
 
       </li>
       <li class="doc doc-backlink">
@@ -9322,7 +9337,15 @@
 <span class="normal">72</span>
 <span class="normal">73</span>
 <span class="normal">74</span>
-<span class="normal">75</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">_read_layers_from_manifest</span><span class="p">(</span>
+<span class="normal">75</span>
+<span class="normal">76</span>
+<span class="normal">77</span>
+<span class="normal">78</span>
+<span class="normal">79</span>
+<span class="normal">80</span>
+<span class="normal">81</span>
+<span class="normal">82</span>
+<span class="normal">83</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">_read_layers_from_manifest</span><span class="p">(</span>
     <span class="n">image_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
     <span class="n">target_platform</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">logger</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">logging</span><span class="o">.</span><span class="n">Logger</span><span class="p">]</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">),</span>
@@ -9350,11 +9373,14 @@
     <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">blobs_dir</span> <span class="o">/</span> <span class="n">manifest_hash</span><span class="p">)</span> <span class="k">as</span> <span class="n">manifest_file</span><span class="p">:</span>
         <span class="n">manifest</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">manifest_file</span><span class="p">)</span>
 
-    <span class="c1"># Multi-platform images may have multiple levels of manifests from the index.</span>
-    <span class="k">if</span> <span class="s2">&quot;layers&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">manifest</span> <span class="ow">and</span> <span class="s2">&quot;manifests&quot;</span> <span class="ow">in</span> <span class="n">manifest</span><span class="p">:</span>
+    <span class="c1"># Multi-platform images may have multiple levels of nested manifests.</span>
+    <span class="c1"># Loop through manifests as needed until layers are found.</span>
+    <span class="n">visited</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="k">while</span> <span class="s2">&quot;layers&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">manifest</span> <span class="ow">and</span> <span class="s2">&quot;manifests&quot;</span> <span class="ow">in</span> <span class="n">manifest</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
-            <span class="s2">&quot;Multi-platform image detected, looking for matching platform manifest...&quot;</span>
+            <span class="s2">&quot;Manifest without layers detected, looking for matching platform manifest...&quot;</span>
         <span class="p">)</span>
+        <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="k">for</span> <span class="n">platform_manifest</span> <span class="ow">in</span> <span class="n">manifest</span><span class="p">[</span><span class="s2">&quot;manifests&quot;</span><span class="p">]:</span>
             <span class="n">platform_values</span> <span class="o">=</span> <span class="n">target_platform</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
             <span class="n">platform_fields</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;os&quot;</span><span class="p">,</span> <span class="s2">&quot;architecture&quot;</span><span class="p">,</span> <span class="s2">&quot;variant&quot;</span><span class="p">]</span>
@@ -9365,11 +9391,16 @@
                 <span class="p">)</span>
             <span class="p">):</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Matching platform found!&quot;</span><span class="p">)</span>
-                <span class="k">with</span> <span class="nb">open</span><span class="p">(</span>
-                    <span class="n">blobs_dir</span>
-                    <span class="o">/</span> <span class="n">platform_manifest</span><span class="p">[</span><span class="s2">&quot;digest&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">removeprefix</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">HASH_PREFIX</span><span class="si">}</span><span class="s2">:&quot;</span><span class="p">)</span>
-                <span class="p">)</span> <span class="k">as</span> <span class="n">manifest_file</span><span class="p">:</span>
+                <span class="n">new_hash</span> <span class="o">=</span> <span class="n">platform_manifest</span><span class="p">[</span><span class="s2">&quot;digest&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">removeprefix</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">HASH_PREFIX</span><span class="si">}</span><span class="s2">:&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">blobs_dir</span><span class="si">}</span><span class="s2">-</span><span class="si">{</span><span class="n">new_hash</span><span class="si">}</span><span class="s2">&quot;</span> <span class="ow">in</span> <span class="n">visited</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">ImageDeltaException</span><span class="p">(</span><span class="s2">&quot;Cycle detected while resolving manifest&quot;</span><span class="p">)</span>
+                <span class="n">visited</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">blobs_dir</span><span class="si">}</span><span class="s2">-</span><span class="si">{</span><span class="n">new_hash</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">blobs_dir</span> <span class="o">/</span> <span class="n">new_hash</span><span class="p">)</span> <span class="k">as</span> <span class="n">manifest_file</span><span class="p">:</span>
                     <span class="n">manifest</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">manifest_file</span><span class="p">)</span>
+                <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="k">break</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">found</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ImageDeltaException</span><span class="p">(</span><span class="s2">&quot;No matching platform found in manifest&quot;</span><span class="p">)</span>
 
     <span class="n">layers</span> <span class="o">=</span> <span class="p">[</span>
         <span class="n">blobs_dir</span> <span class="o">/</span> <span class="n">layer</span><span class="p">[</span><span class="s2">&quot;digest&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">removeprefix</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">HASH_PREFIX</span><span class="si">}</span><span class="s2">:&quot;</span><span class="p">)</span>
@@ -9491,15 +9522,7 @@
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/mender_docker_lifecycle_helper/utils/deep_delta.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 78</span>
-<span class="normal"> 79</span>
-<span class="normal"> 80</span>
-<span class="normal"> 81</span>
-<span class="normal"> 82</span>
-<span class="normal"> 83</span>
-<span class="normal"> 84</span>
-<span class="normal"> 85</span>
-<span class="normal"> 86</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 86</span>
 <span class="normal"> 87</span>
 <span class="normal"> 88</span>
 <span class="normal"> 89</span>
@@ -9580,7 +9603,15 @@
 <span class="normal">164</span>
 <span class="normal">165</span>
 <span class="normal">166</span>
-<span class="normal">167</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">oci_deep_delta</span><span class="p">(</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">oci_deep_delta</span><span class="p">(</span>
     <span class="n">from_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
     <span class="n">to_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
     <span class="n">delta_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
