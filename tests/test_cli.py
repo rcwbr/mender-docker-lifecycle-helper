@@ -716,3 +716,89 @@ class TestCliIntegration:
 
         assert result.exit_code != 0
         assert "Missing" in result.output or "required" in result.output.lower()
+
+    def test_cli_with_wait_for_deploy(self, tmp_path):
+        """Test CLI with --wait-for-deploy option."""
+        manifest_file = tmp_path / "docker-compose.yml"
+        manifest_file.touch()
+
+        mock_helper = MagicMock()
+        mock_instance = MagicMock()
+        mock_helper.return_value = mock_instance
+
+        with patch("mender_docker_lifecycle_helper.cli.LifecycleHelper", mock_helper):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "-t",
+                    "virtual",
+                    "-p",
+                    "linux/arm/v7",
+                    "--previous-version",
+                    "1.0.0",
+                    "-w",
+                    str(manifest_file),
+                ],
+            )
+
+        assert result.exit_code == 0
+        call_args = mock_helper.call_args[0][0]
+        assert call_args.wait_for_deploy is True
+
+    def test_cli_without_wait_for_deploy(self, tmp_path):
+        """Test CLI without --wait-for-deploy option (default False)."""
+        manifest_file = tmp_path / "docker-compose.yml"
+        manifest_file.touch()
+
+        mock_helper = MagicMock()
+        mock_instance = MagicMock()
+        mock_helper.return_value = mock_instance
+
+        with patch("mender_docker_lifecycle_helper.cli.LifecycleHelper", mock_helper):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "-t",
+                    "virtual",
+                    "-p",
+                    "linux/arm/v7",
+                    "--previous-version",
+                    "1.0.0",
+                    str(manifest_file),
+                ],
+            )
+
+        assert result.exit_code == 0
+        call_args = mock_helper.call_args[0][0]
+        assert call_args.wait_for_deploy is False
+
+    def test_cli_with_long_form_wait_for_deploy(self, tmp_path):
+        """Test CLI with --wait-for-deploy long form option."""
+        manifest_file = tmp_path / "docker-compose.yml"
+        manifest_file.touch()
+
+        mock_helper = MagicMock()
+        mock_instance = MagicMock()
+        mock_helper.return_value = mock_instance
+
+        with patch("mender_docker_lifecycle_helper.cli.LifecycleHelper", mock_helper):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "-t",
+                    "virtual",
+                    "-p",
+                    "linux/arm/v7",
+                    "--previous-version",
+                    "1.0.0",
+                    "--wait-for-deploy",
+                    str(manifest_file),
+                ],
+            )
+
+        assert result.exit_code == 0
+        call_args = mock_helper.call_args[0][0]
+        assert call_args.wait_for_deploy is True

@@ -40,6 +40,7 @@ class LifecycleHelperContext:
         self.release = args.release
         self.service_files = args.service_files
         self.service_images = args.service_images
+        self.wait_for_deploy = getattr(args, "wait_for_deploy", False)
 
         self.logger = self._prep_logger(args.log_level)
 

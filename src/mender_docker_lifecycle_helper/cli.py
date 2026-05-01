@@ -111,6 +111,13 @@ from mender_docker_lifecycle_helper.helper import LifecycleHelper
     multiple=True,
 )
 @click.option(
+    "-w",
+    "--wait-for-deploy",
+    is_flag=True,
+    default=False,
+    help="Wait for deployment to complete and only cache metadata on success.",
+)
+@click.option(
     "-v",
     "--verbose",
     count=True,
