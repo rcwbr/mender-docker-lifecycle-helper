@@ -259,6 +259,204 @@ class TestReadLayersFromManifest:
             assert len(layers) == 1
             assert layers[0] == blobs_dir / "amd64_layer1"
 
+    def test_read_layers_from_manifest_deeply_nested(self):
+        """Test _read_layers_from_manifest handles deeply nested manifests (multiple levels)."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            test_dir = Path(tmp_dir) / "test-image"
+            blobs_dir = test_dir / "blobs" / "sha256"
+            blobs_dir.mkdir(parents=True)
+
+            # index.json points to level1 manifest (no layers, has manifests)
+            index_data = {
+                "schemaVersion": 2,
+                "manifests": [
+                    {
+                        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                        "digest": "sha256:manifest_level1",
+                    },
+                ],
+            }
+            index_file = test_dir / "index.json"
+            index_file.write_text(json.dumps(index_data))
+
+            # Level 1 manifest: no layers, contains platform-specific manifests
+            # This simulates a multi-arch index that points to another multi-arch index
+            level1_manifest = {
+                "schemaVersion": 2,
+                "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                "manifests": [
+                    {
+                        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                        "digest": "sha256:manifest_level2_amd64",
+                        "platform": {"os": "linux", "architecture": "amd64"},
+                    },
+                    {
+                        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                        "digest": "sha256:manifest_level2_arm64",
+                        "platform": {"os": "linux", "architecture": "arm64"},
+                    },
+                ],
+            }
+            (blobs_dir / "manifest_level1").write_text(json.dumps(level1_manifest))
+
+            # Level 2 manifest for amd64: still no layers, another level of nesting
+            level2_amd64_manifest = {
+                "schemaVersion": 2,
+                "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                "manifests": [
+                    {
+                        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                        "digest": "sha256:manifest_final_amd64",
+                        "platform": {"os": "linux", "architecture": "amd64"},
+                    },
+                ],
+            }
+            (blobs_dir / "manifest_level2_amd64").write_text(
+                json.dumps(level2_amd64_manifest)
+            )
+
+            # Level 2 manifest for arm64: still no layers, another level of nesting
+            level2_arm64_manifest = {
+                "schemaVersion": 2,
+                "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                "manifests": [
+                    {
+                        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                        "digest": "sha256:manifest_final_arm64",
+                        "platform": {"os": "linux", "architecture": "arm64"},
+                    },
+                ],
+            }
+            (blobs_dir / "manifest_level2_arm64").write_text(
+                json.dumps(level2_arm64_manifest)
+            )
+
+            # Final amd64 manifest with actual layers
+            final_amd64_manifest = {
+                "schemaVersion": 2,
+                "layers": [
+                    {
+                        "digest": "sha256:deep_amd64_layer1",
+                        "size": 1000,
+                        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                    },
+                    {
+                        "digest": "sha256:deep_amd64_layer2",
+                        "size": 2000,
+                        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                    },
+                ],
+            }
+            (blobs_dir / "manifest_final_amd64").write_text(
+                json.dumps(final_amd64_manifest)
+            )
+
+            # Final arm64 manifest with actual layers
+            final_arm64_manifest = {
+                "schemaVersion": 2,
+                "layers": [
+                    {
+                        "digest": "sha256:deep_arm64_layer1",
+                        "size": 1000,
+                        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                    },
+                ],
+            }
+            (blobs_dir / "manifest_final_arm64").write_text(
+                json.dumps(final_arm64_manifest)
+            )
+
+            # Test amd64 - should traverse 3 levels deep
+            layers = _read_layers_from_manifest(test_dir, "linux/amd64")
+            assert len(layers) == 2
+            assert layers[0] == blobs_dir / "deep_amd64_layer1"
+            assert layers[1] == blobs_dir / "deep_amd64_layer2"
+
+            # Test arm64 - should traverse 3 levels deep
+            layers = _read_layers_from_manifest(test_dir, "linux/arm64")
+            assert len(layers) == 1
+            assert layers[0] == blobs_dir / "deep_arm64_layer1"
+
+    def test_read_layers_from_manifest_cycle_detection(self):
+        """Test _read_layers_from_manifest raises exception on cyclic manifest references."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            test_dir = Path(tmp_dir) / "test-image"
+            blobs_dir = test_dir / "blobs" / "sha256"
+            blobs_dir.mkdir(parents=True)
+
+            # index.json points to manifest_a
+            index_data = {
+                "schemaVersion": 2,
+                "manifests": [
+                    {
+                        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                        "digest": "sha256:manifest_a",
+                    },
+                ],
+            }
+            index_file = test_dir / "index.json"
+            index_file.write_text(json.dumps(index_data))
+
+            # manifest_a points back to manifest_a (cycle)
+            manifest_a = {
+                "schemaVersion": 2,
+                "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                "manifests": [
+                    {
+                        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                        "digest": "sha256:manifest_a",
+                        "platform": {"os": "linux", "architecture": "amd64"},
+                    },
+                ],
+            }
+            (blobs_dir / "manifest_a").write_text(json.dumps(manifest_a))
+
+            # Should raise ImageDeltaException due to cycle detection
+            with pytest.raises(ImageDeltaException) as exc_info:
+                _read_layers_from_manifest(test_dir, "linux/amd64")
+
+            assert "Cycle detected" in str(exc_info.value)
+
+    def test_read_layers_from_manifest_no_matching_platform(self):
+        """Test _read_layers_from_manifest raises exception when no matching platform in nested manifest."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            test_dir = Path(tmp_dir) / "test-image"
+            blobs_dir = test_dir / "blobs" / "sha256"
+            blobs_dir.mkdir(parents=True)
+
+            # index.json points to an intermediate manifest
+            index_data = {
+                "schemaVersion": 2,
+                "manifests": [
+                    {
+                        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                        "digest": "sha256:manifest_level1",
+                    },
+                ],
+            }
+            index_file = test_dir / "index.json"
+            index_file.write_text(json.dumps(index_data))
+
+            # Level 1 manifest has no matching platform
+            level1_manifest = {
+                "schemaVersion": 2,
+                "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                "manifests": [
+                    {
+                        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                        "digest": "sha256:manifest_arm64",
+                        "platform": {"os": "linux", "architecture": "arm64"},
+                    },
+                ],
+            }
+            (blobs_dir / "manifest_level1").write_text(json.dumps(level1_manifest))
+
+            # Should raise ImageDeltaException when no matching platform found
+            with pytest.raises(ImageDeltaException) as exc_info:
+                _read_layers_from_manifest(test_dir, "linux/amd64")
+
+            assert "No matching platform found" in str(exc_info.value)
+
 
 class TestOCIDeepDelta:
     """Tests for the deep_delta oci_deep_delta function"""

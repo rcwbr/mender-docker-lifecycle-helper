@@ -47,11 +47,14 @@ def _read_layers_from_manifest(
     with open(blobs_dir / manifest_hash) as manifest_file:
         manifest = json.load(manifest_file)
 
-    # Multi-platform images may have multiple levels of manifests from the index.
-    if "layers" not in manifest and "manifests" in manifest:
+    # Multi-platform images may have multiple levels of nested manifests.
+    # Loop through manifests as needed until layers are found.
+    visited = set()
+    while "layers" not in manifest and "manifests" in manifest:
         logger.debug(
-            "Multi-platform image detected, looking for matching platform manifest..."
+            "Manifest without layers detected, looking for matching platform manifest..."
         )
+        found = False
         for platform_manifest in manifest["manifests"]:
             platform_values = target_platform.split("/")
             platform_fields = ["os", "architecture", "variant"]
@@ -62,11 +65,16 @@ def _read_layers_from_manifest(
                 )
             ):
                 logger.debug("Matching platform found!")
-                with open(
-                    blobs_dir
-                    / platform_manifest["digest"].removeprefix(f"{HASH_PREFIX}:")
-                ) as manifest_file:
+                new_hash = platform_manifest["digest"].removeprefix(f"{HASH_PREFIX}:")
+                if f"{blobs_dir}-{new_hash}" in visited:
+                    raise ImageDeltaException("Cycle detected while resolving manifest")
+                visited.add(f"{blobs_dir}-{new_hash}")
+                with open(blobs_dir / new_hash) as manifest_file:
                     manifest = json.load(manifest_file)
+                found = True
+                break
+        if not found:
+            raise ImageDeltaException("No matching platform found in manifest")
 
     layers = [
         blobs_dir / layer["digest"].removeprefix(f"{HASH_PREFIX}:")
