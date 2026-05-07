@@ -1,7 +1,8 @@
 {
   "containerEnv": {
     "DEVCONTAINER_HOST_WORKSPACE_MOUNT": "/var/lib/docker/codespacemount/workspace/mender-docker-lifecycle-helper",
-    "DEVCONTAINER_WORKSPACE_PATH": "${containerWorkspaceFolder}"
+    "DEVCONTAINER_WORKSPACE_PATH": "${containerWorkspaceFolder}",
+    "PYTEST_DEBUG_TEMPROOT": "/var/pytest-tmp"
   },
   "customizations": {
     "vscode": {
@@ -27,6 +28,11 @@
       "source": "/var/run/docker.sock",
       "target": "/var/run/docker.sock",
       "type": "bind"
+    },
+    {
+      "source": "pytest-tmp",
+      "target": "/var/pytest-tmp",
+      "type": "volume"
     }
   ],
   "name": "mender-docker-lifecycle-helper",

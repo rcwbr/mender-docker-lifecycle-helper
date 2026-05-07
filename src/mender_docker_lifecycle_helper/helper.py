@@ -98,6 +98,18 @@ class LifecycleHelper:
         )
         return deployment_id
 
+    def update_cache_artifact_metadata(
+        self, artifact_metadata: ArtifactMetadata
+    ) -> None:
+        """
+        TODO
+        """
+        if self.context.cache:
+            self.context.logger.debug(
+                f"Updating cached metadata at {self.context.cache_artifact_metadata_file}"
+            )
+            artifact_metadata.to_file(self.context.cache_artifact_metadata_file)
+
     def prep_artifact(self) -> None:
         """
         Prepare the artifact, including creation, upload, and deployment as specified by provided args.

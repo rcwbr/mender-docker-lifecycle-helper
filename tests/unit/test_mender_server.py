@@ -359,6 +359,8 @@ class TestWaitForDeployment:
 
     def test_wait_for_deployment_timeout(self, monkeypatch):
         """Test wait_for_deployment returns False on timeout."""
+        time_values = [0, 0, 11]  # start_time=0, loop check=0 (enter), then 11 (exit)
+        time_index = [0]
 
         class MockResponse:
             status_code = 200
@@ -380,6 +382,11 @@ class TestWaitForDeployment:
         def mock_get(*args, **kwargs):
             return MockResponse()
 
+        def mock_time():
+            idx = time_index[0]
+            time_index[0] += 1
+            return time_values[min(idx, len(time_values) - 1)]
+
         monkeypatch.setattr(
             "mender_docker_lifecycle_helper.utils.mender_server.requests.get",
             mock_get,
@@ -390,20 +397,13 @@ class TestWaitForDeployment:
         )
         monkeypatch.setattr(
             "mender_docker_lifecycle_helper.utils.mender_server.time.time",
-            lambda: 1000,  # Simulate time past timeout
+            mock_time,
         )
 
         context = SimpleNamespace(
             mender_pat="test-pat-token",
             mender_host="https://hosted.mender.io",
             logger=MagicMock(),
-        )
-
-        # Set start time to 0, so timeout is immediately exceeded
-        original_wait = (
-            wait_for_deployment.__wrapped__
-            if hasattr(wait_for_deployment, "__wrapped__")
-            else None
         )
 
         result = wait_for_deployment(
