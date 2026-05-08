@@ -24,6 +24,10 @@ class TestIntegrationUploadArtifact:
             repo=repo,
         )
 
+
+class TestIntegrationDeployArtifact:
+    """Tests for full mender-docker-lifecycle-helper deploy to device"""
+
     def test_prebuilt_deploy_artifact(
         self, custom_docker_daemon, mender_server, mender_client, tmp_path
     ):
@@ -47,60 +51,6 @@ class TestIntegrationUploadArtifact:
 
         # Verify that the containers from the manifest are running in the custom Docker daemon
         manifest_file = repo_dir / "prebuilt" / "docker-compose.yaml"
-        verify_manifest_containers_running(
-            docker_host, manifest_file, f"{repo_dir.name}-prebuilt"
-        )
-
-    def test_prebuilt_deploy_delta_artifact(
-        self, custom_docker_daemon, mender_server, mender_client, tmp_path
-    ):
-        docker_host, _, _ = custom_docker_daemon
-        mender_host, jwt = mender_server
-        mender_client_id = mender_client
-        repo_dir, repo = prepare_repo(tmp_path)
-
-        device_group = "testcontainers-clients"
-        apply_client_to_group(mender_host, jwt, mender_client_id, device_group)
-
-        manifest_file = repo_dir / "prebuilt" / "docker-compose.yaml"
-
-        # Base artifact
-        generate_and_validate_artifact(
-            tmp_path,
-            mender_host=mender_host,
-            jwt=jwt,
-            cache=True,
-            device_group=device_group,
-            repo_dir=repo_dir,
-            repo=repo,
-            wait_for_deploy=True,
-        )
-
-        # Verify containers are running after base deployment
-        verify_manifest_containers_running(
-            docker_host, manifest_file, f"{repo_dir.name}-prebuilt"
-        )
-
-        # Create a new commit to generate a new version for delta
-        (repo_dir / "VERSION").write_text("1.0.1")
-        repo.index.add(repo_dir / "VERSION")
-        repo.index.commit("update version")
-        repo.create_tag("1.0.1")
-
-        # Delta artifact
-        generate_and_validate_artifact(
-            tmp_path,
-            mender_host=mender_host,
-            jwt=jwt,
-            cache=True,
-            delta=True,
-            device_group=device_group,
-            repo_dir=repo_dir,
-            repo=repo,
-            wait_for_deploy=True,
-        )
-
-        # Verify containers are running after delta deployment
         verify_manifest_containers_running(
             docker_host, manifest_file, f"{repo_dir.name}-prebuilt"
         )
@@ -175,3 +125,57 @@ class TestIntegrationUploadArtifact:
         assert updated_image_hash != initial_image_hash
         # Verify the new image hash is valid (non-empty and different from initial)
         assert isinstance(updated_image_hash, str) and len(updated_image_hash) > 0
+
+    def test_prebuilt_deploy_delta_artifact(
+        self, custom_docker_daemon, mender_server, mender_client, tmp_path
+    ):
+        docker_host, _, _ = custom_docker_daemon
+        mender_host, jwt = mender_server
+        mender_client_id = mender_client
+        repo_dir, repo = prepare_repo(tmp_path)
+
+        device_group = "testcontainers-clients"
+        apply_client_to_group(mender_host, jwt, mender_client_id, device_group)
+
+        manifest_file = repo_dir / "prebuilt" / "docker-compose.yaml"
+
+        # Base artifact
+        generate_and_validate_artifact(
+            tmp_path,
+            mender_host=mender_host,
+            jwt=jwt,
+            cache=True,
+            device_group=device_group,
+            repo_dir=repo_dir,
+            repo=repo,
+            wait_for_deploy=True,
+        )
+
+        # Verify containers are running after base deployment
+        verify_manifest_containers_running(
+            docker_host, manifest_file, f"{repo_dir.name}-prebuilt"
+        )
+
+        # Create a new commit to generate a new version for delta
+        (repo_dir / "VERSION").write_text("1.0.1")
+        repo.index.add(repo_dir / "VERSION")
+        repo.index.commit("update version")
+        repo.create_tag("1.0.1")
+
+        # Delta artifact
+        generate_and_validate_artifact(
+            tmp_path,
+            mender_host=mender_host,
+            jwt=jwt,
+            cache=True,
+            delta=True,
+            device_group=device_group,
+            repo_dir=repo_dir,
+            repo=repo,
+            wait_for_deploy=True,
+        )
+
+        # Verify containers are running after delta deployment
+        verify_manifest_containers_running(
+            docker_host, manifest_file, f"{repo_dir.name}-prebuilt"
+        )

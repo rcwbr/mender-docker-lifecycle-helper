@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from tests.fixtures.mender_server import mender_server
 from tests.fixtures.mender_client import mender_client
 from tests.utils.mender_server_api import apply_client_to_group
@@ -6,79 +8,92 @@ from tests.utils.generate_and_validate_artifact import generate_and_validate_art
 from tests.utils.docker_utils import verify_manifest_containers_running
 
 
-class TestIntegrationOci:
+def _ensure_builder():
+    """Ensure a buildx builder with docker-container driver exists."""
+    import subprocess
+
+    # Check for existing builder with container driver
+    result = subprocess.run(
+        ["docker", "buildx", "ls", "--format", "{{.Name}} {{.Driver}}"],
+        capture_output=True,
+        text=True,
+    )
+    for line in result.stdout.strip().splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[1] == "docker-container":
+            return parts[0]
+
+    # Create a new builder with --use flag
+    result = subprocess.run(
+        [
+            "docker",
+            "buildx",
+            "create",
+            "--driver",
+            "docker-container",
+            "--name",
+            "oci-builder",
+            "--use",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        if "existing instance" in result.stderr:
+            return "oci-builder"
+        raise RuntimeError(f"Failed to create buildx builder: {result.stderr}")
+    return "oci-builder"
+
+
+def _build_oci_tar(tmp_path, dockerfile_content, tag="test-oci"):
+    """Build a Dockerfile and output as an OCI tar using docker buildx bake."""
+    import subprocess
+
+    build_dir = tmp_path / "oci-build"
+    build_dir.mkdir(exist_ok=True)
+
+    (build_dir / "Dockerfile").write_text(dockerfile_content)
+
+    oci_tar_path = tmp_path / "service-image.oci"
+    builder = _ensure_builder()
+
+    # Write the bake HCL file with values substituted
+    bake_hcl = (
+        'target "test-oci" {\n'
+        f'  context    = "{build_dir}"\n'
+        f'  dockerfile = "{build_dir}/Dockerfile"\n'
+        f'  tags       = ["{tag}"]\n'
+        f'  output     = ["type=oci,dest={oci_tar_path}"]\n'
+        "}\n"
+    )
+    bake_file = tmp_path / "docker-bake.hcl"
+    bake_file.write_text(bake_hcl)
+
+    result = subprocess.run(
+        [
+            "docker",
+            "buildx",
+            "bake",
+            "--builder",
+            builder,
+            "--allow",
+            f"fs.read={build_dir}",
+            "-f",
+            str(bake_file),
+            "test-oci",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"docker buildx bake failed: {result.stderr}")
+
+    assert oci_tar_path.exists()
+    return oci_tar_path
+
+
+class TestIntegrationOCI:
     """Tests for OCI-based artifact creation and deployment"""
-
-    def _build_oci_tar(self, tmp_path, dockerfile_content, image_ref, tag="test-oci"):
-        """Build a Dockerfile and output as an OCI tar with proper annotations."""
-        import json
-        import subprocess
-
-        build_dir = tmp_path / "oci-build"
-        build_dir.mkdir(exist_ok=True)
-        (build_dir / "Dockerfile").write_text(dockerfile_content)
-
-        # Build the image using standard docker build
-        result = subprocess.run(
-            ["docker", "build", "-t", tag, str(build_dir)],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(f"docker build failed: {result.stderr}")
-
-        # Save the image as docker archive
-        docker_tar_path = tmp_path / "docker-image.tar"
-        result = subprocess.run(
-            ["docker", "save", "-o", str(docker_tar_path), tag],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(f"docker save failed: {result.stderr}")
-
-        # Convert to OCI layout using skopeo
-        oci_dir = tmp_path / "oci-layout"
-        oci_dir.mkdir(exist_ok=True)
-        result = subprocess.run(
-            [
-                "skopeo",
-                "copy",
-                f"docker-archive:{docker_tar_path}",
-                f"oci:{oci_dir}",
-            ],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(f"skopeo copy failed: {result.stderr}")
-
-        # Add io.containerd.image.name annotation to OCI index
-        index_path = oci_dir / "index.json"
-        with open(index_path, "r") as f:
-            index = json.load(f)
-
-        # Add annotation to the first manifest
-        if "manifests" in index and len(index["manifests"]) > 0:
-            if "annotations" not in index["manifests"][0]:
-                index["manifests"][0]["annotations"] = {}
-            index["manifests"][0]["annotations"]["io.containerd.image.name"] = image_ref
-
-        with open(index_path, "w") as f:
-            json.dump(index, f)
-
-        # Create OCI tar from the layout directory
-        oci_tar_path = tmp_path / "service-image.oci"
-        result = subprocess.run(
-            ["tar", "-cf", str(oci_tar_path), "-C", str(oci_dir), "."],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(f"tar failed: {result.stderr}")
-
-        assert oci_tar_path.exists()
-        return oci_tar_path
 
     def test_oci_upload_artifact(self, mender_server, tmp_path):
         """Test building a Dockerfile, saving as OCI tar, and uploading as service-file."""
@@ -86,9 +101,10 @@ class TestIntegrationOci:
         repo_dir, repo = prepare_repo(tmp_path)
 
         # Build OCI tar from a simple Dockerfile
-        dockerfile_content = """FROM busybox:1.37.0-musl
-"""
-        oci_tar_path = self._build_oci_tar(tmp_path, dockerfile_content, "myapp:1.0.0")
+        dockerfile_content = (
+            "FROM busybox:1.37.0-musl\n" "LABEL io.containerd.image.name=myapp:1.0.0\n"
+        )
+        oci_tar_path = _build_oci_tar(tmp_path, dockerfile_content)
 
         # Use the OCI tar as a service file for prebuilt-service
         service_files = {"prebuilt-service": oci_tar_path}
@@ -116,12 +132,11 @@ class TestIntegrationOci:
         apply_client_to_group(mender_host, jwt, mender_client_id, device_group)
 
         # Build OCI tar from a simple Dockerfile
-        dockerfile_content = """FROM busybox:1.37.0-musl
-LABEL io.containerd.image.name=oci-app:1.0.0
-"""
-        oci_tar_path = self._build_oci_tar(
-            tmp_path, dockerfile_content, "oci-app:1.0.0"
+        dockerfile_content = (
+            "FROM busybox:1.37.0-musl\n"
+            "LABEL io.containerd.image.name=oci-app:1.0.0\n"
         )
+        oci_tar_path = _build_oci_tar(tmp_path, dockerfile_content)
 
         # Use the OCI tar as a service file for prebuilt-service
         service_files = {"prebuilt-service": oci_tar_path}
@@ -139,6 +154,78 @@ LABEL io.containerd.image.name=oci-app:1.0.0
         )
 
         # Verify that the containers from the manifest are running in the custom Docker daemon
+        verify_manifest_containers_running(
+            docker_host, manifest_file, f"{repo_dir.name}-prebuilt"
+        )
+
+    def test_oci_deploy_delta_artifact(
+        self, custom_docker_daemon, mender_server, mender_client, tmp_path
+    ):
+        """Test building OCI images and deploying a delta artifact after modification."""
+        docker_host, _, _ = custom_docker_daemon
+        mender_host, jwt = mender_server
+        mender_client_id = mender_client
+        repo_dir, repo = prepare_repo(tmp_path)
+
+        device_group = "testcontainers-clients"
+        apply_client_to_group(mender_host, jwt, mender_client_id, device_group)
+
+        manifest_file = repo_dir / "prebuilt" / "docker-compose.yaml"
+
+        # Step 1: Build and deploy base OCI image
+        dockerfile_v1 = (
+            "FROM busybox:1.37.0-musl\n"
+            "RUN echo test1 > /test-file\n"
+            "LABEL io.containerd.image.name=oci-app:1.0.0\n"
+        )
+        oci_tar_v1 = _build_oci_tar(tmp_path, dockerfile_v1)
+
+        generate_and_validate_artifact(
+            tmp_path,
+            mender_host=mender_host,
+            jwt=jwt,
+            cache=True,
+            device_group=device_group,
+            repo_dir=repo_dir,
+            repo=repo,
+            service_files={"prebuilt-service": oci_tar_v1},
+            wait_for_deploy=True,
+        )
+
+        # Verify containers are running after base deployment
+        verify_manifest_containers_running(
+            docker_host, manifest_file, f"{repo_dir.name}-prebuilt"
+        )
+
+        # Step 2: Modify the Dockerfile and build new OCI image
+        dockerfile_v2 = (
+            "FROM busybox:1.36.1-musl\n"
+            "RUN echo test2 > /test-file\n"
+            "LABEL io.containerd.image.name=oci-app:1.0.1\n"
+        )
+        oci_tar_v2 = _build_oci_tar(tmp_path, dockerfile_v2)
+
+        # Create a new commit to generate a new version for delta
+        (repo_dir / "VERSION").write_text("1.0.1")
+        repo.index.add(repo_dir / "VERSION")
+        repo.index.commit("update version")
+        repo.create_tag("1.0.1")
+
+        # Step 3: Generate and deploy delta artifact
+        generate_and_validate_artifact(
+            tmp_path,
+            mender_host=mender_host,
+            jwt=jwt,
+            cache=True,
+            delta=True,
+            device_group=device_group,
+            repo_dir=repo_dir,
+            repo=repo,
+            service_files={"prebuilt-service": oci_tar_v2},
+            wait_for_deploy=True,
+        )
+
+        # Verify containers are running after delta deployment
         verify_manifest_containers_running(
             docker_host, manifest_file, f"{repo_dir.name}-prebuilt"
         )
