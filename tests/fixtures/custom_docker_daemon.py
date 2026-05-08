@@ -9,6 +9,9 @@ from testcontainers.core.wait_strategies import LogMessageWaitStrategy
 
 pytest_temp_root = Path(os.environ["PYTEST_DEBUG_TEMPROOT"])
 tests_resources_path = Path("tests/resources").resolve()
+tests_resources_host_path = Path(
+    os.environ["DEVCONTAINER_HOST_WORKSPACE_MOUNT"]
+) / tests_resources_path.relative_to(Path(os.environ["DEVCONTAINER_WORKSPACE_PATH"]))
 
 
 @pytest.fixture(scope="function")
@@ -20,7 +23,7 @@ def custom_docker_daemon(tmp_path):
         volumes=[
             ("testcontainers-dind-temp", "/var/lib/docker/containerd", "rw"),
             ("pytest-tmp", str(pytest_temp_root), "rw"),
-            (str(tests_resources_path), str(tests_resources_path), "ro"),
+            (str(tests_resources_host_path), str(tests_resources_path), "ro"),
         ],
         ports=[2375, 443],
         command="--tls=false",

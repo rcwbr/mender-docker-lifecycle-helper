@@ -1,6 +1,7 @@
 import pytest
 import re
 import requests
+import random
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519
@@ -15,7 +16,8 @@ def mender_client(custom_docker_daemon, mender_server, tmp_path):
     _, _, docker_compose_wrapper = custom_docker_daemon
     mender_host, jwt = mender_server
 
-    mender_client_mac_address = "7c:1e:52:7c:76:56"
+    # Generate a random MAC address to avoid conflicts with previous test runs
+    mender_client_mac_address = f"7c:1e:{random.randint(0x00, 0xFF):02x}:{random.randint(0x00, 0xFF):02x}:{random.randint(0x00, 0xFF):02x}:{random.randint(0x00, 0xFF):02x}"
 
     # Preauthenticate the client
     mender_client_private_key = ed25519.Ed25519PrivateKey.generate()
@@ -98,3 +100,14 @@ def mender_client(custom_docker_daemon, mender_server, tmp_path):
         assert response.json()[0]["status"] == "accepted"
 
         yield response.json()[0]["id"]
+
+        # Print mender-client logs after every test for debugging
+        try:
+            stdout, stderr = mender_client.get_logs()
+            print("\n=== MENDER-CLIENT LOGS ===")
+            print(stdout)
+            if stderr:
+                print("\n=== MENDER-CLIENT STDERR ===")
+                print(stderr)
+        except Exception as e:
+            print(f"\nFailed to capture mender-client logs: {e}")

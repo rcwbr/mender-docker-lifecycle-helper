@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 from mender_docker_lifecycle_helper.utils.mender_server import (
     call_mender_host_api,
+    upload_artifact,
     wait_for_deployment,
 )
 from mender_docker_lifecycle_helper.artifact_metadata import ArtifactMetadata
@@ -49,27 +50,6 @@ class LifecycleHelper:
         self.context.logger.info("Artifact file generated successfully.")
         return artifact
 
-    def upload_artifact(self, artifact: LifecycleHelperArtifact) -> None:
-        """
-        Upload the specified artifact file to the Mender server.
-
-        :param artifact: The object of the artifact to upload to the Mender server.
-        :return: None
-        """
-        with open(artifact.filename, "rb") as file_contents:
-            call_mender_host_api(
-                self.context,
-                "deployments/artifacts",
-                {
-                    "data": {
-                        "size": artifact.filename.stat().st_size,
-                        "description": "string",
-                    },
-                    "files": {"artifact": file_contents},
-                },
-            )
-            self.context.logger.info(f"Uploaded artifact {artifact.filename}")
-
     def deploy_artifact(self, artifact: LifecycleHelperArtifact) -> str:
         """
         Issue a deployment of a pre-uploaded artifact.
@@ -92,7 +72,22 @@ class LifecycleHelper:
                 }
             },
         )
-        deployment_id = response.text.strip('"')
+        deployment_id = None
+        if "Location" in response.headers:
+            location = response.headers["Location"]
+            # Location header format: /deployments/v1/deployments/{deploymentId}
+            deployment_id = location.rstrip("/").split("/")[-1]
+            self.context.logger.debug(
+                f"Got deployment ID from Location header: {deployment_id}"
+            )
+        else:
+            self.context.logger.error(
+                f"Could not extract deployment ID from response. "
+                f"Body: {response.text!r}, Headers: {dict(response.headers)}"
+            )
+            raise ValueError(
+                "Could not determine deployment ID from Mender API response"
+            )
         self.context.logger.info(
             f"Created deployment {deployment_name} (ID: {deployment_id})"
         )
@@ -133,7 +128,7 @@ class LifecycleHelper:
             services=LifecycleHelperArtifact.gen_artifact_services(self.context),
         )
         artifact = self.create_artifact(artifact_metadata)
-        self.upload_artifact(artifact)
+        upload_artifact(self.context, artifact)
 
         if self.context.device_group is not None:
             deployment_id = self.deploy_artifact(artifact)
@@ -144,19 +139,17 @@ class LifecycleHelper:
                 )
                 if wait_for_deployment(self.context, deployment_id):
                     self.context.logger.debug(
-                        f"Deployment succeeded; updating cached metadata at {self.context.cache_artifact_metadata_file}"
+                        f"Deployment {deployment_id} for {artifact.name} succeeded."
                     )
-                    artifact_metadata.to_file(self.context.cache_artifact_metadata_file)
+                    self.update_cache_artifact_metadata(artifact_metadata)
                 else:
                     self.context.logger.error(
                         f"Deployment {deployment_id} did not succeed; "
                         "cached metadata will not be updated."
                     )
             else:
-                self.context.logger.debug(
-                    f"Artifact {artifact.name} deployed; updating cached metadata at {self.context.cache_artifact_metadata_file}"
-                )
-                artifact_metadata.to_file(self.context.cache_artifact_metadata_file)
+                self.context.logger.debug(f"Artifact {artifact.name} deployed.")
+                self.update_cache_artifact_metadata(artifact_metadata)
         else:
             self.context.logger.debug(
                 "No device group set; skipping deployment creation."

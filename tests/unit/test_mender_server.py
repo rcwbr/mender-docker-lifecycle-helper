@@ -6,13 +6,22 @@ import requests
 
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, mock_open
 
 from mender_docker_lifecycle_helper.utils.mender_server import (
     call_mender_host_api,
+    upload_artifact,
     get_deployment_status,
     wait_for_deployment,
 )
+
+
+@pytest.fixture
+def mock_context():
+    """Create a mock LifecycleHelperContext."""
+    return SimpleNamespace(
+        logger=MagicMock(),
+    )
 
 
 class TestCallMenderHostApi:
@@ -180,6 +189,57 @@ class TestCallMenderHostApi:
         assert "auth" in captured_kwargs
 
 
+class TestUploadArtifact:
+    """Tests for the upload_artifact method."""
+
+    def test_upload_artifact_calls_api(self, mock_context):
+        """Test upload_artifact calls the Mender API with correct parameters."""
+        mock_context.mender_host = "https://hosted.mender.io"
+        mock_context.logger = MagicMock()
+
+        artifact = MagicMock()
+        artifact.filename = Path("/tmp/test-artifact.mender")
+        artifact.name = "test-manifest-1.0.0"
+
+        with patch(
+            "mender_docker_lifecycle_helper.utils.mender_server.call_mender_host_api"
+        ) as mock_call_api:
+            with patch("builtins.open", mock_open(read_data=b"fake artifact data")):
+                with patch("pathlib.Path.stat") as mock_stat:
+                    mock_stat.return_value.st_size = 100
+
+                    upload_artifact(mock_context, artifact)
+
+                    assert mock_call_api.call_count == 1
+                    call_args = mock_call_api.call_args
+                    assert call_args[0][0] == mock_context
+                    assert call_args[0][1] == "deployments/artifacts"
+                    assert call_args[0][2]["data"]["size"] == 100
+                    assert call_args[0][2]["data"]["description"] == "string"
+                    assert "artifact" in call_args[0][2]["files"]
+
+    def test_upload_artifact_logs_info(self, mock_context):
+        """Test upload_artifact logs appropriate info message."""
+        mock_context.logger = MagicMock()
+
+        artifact = MagicMock()
+        artifact.filename = Path("/tmp/test-artifact.mender")
+        artifact.name = "test-manifest-1.0.0"
+
+        with patch(
+            "mender_docker_lifecycle_helper.utils.mender_server.call_mender_host_api"
+        ):
+            with patch("builtins.open", mock_open(read_data=b"fake artifact data")):
+                with patch("pathlib.Path.stat") as mock_stat:
+                    mock_stat.return_value.st_size = 100
+
+                    upload_artifact(mock_context, artifact)
+
+                    mock_context.logger.info.assert_called_once_with(
+                        f"Uploaded artifact {artifact.filename}"
+                    )
+
+
 class TestGetDeploymentStatus:
     """Tests for the get_deployment_status function."""
 
@@ -191,12 +251,10 @@ class TestGetDeploymentStatus:
 
             def json(self):
                 return {
-                    "status": {
-                        "success": 5,
-                        "failure": 0,
-                        "pending": 0,
-                        "installing": 0,
-                    }
+                    "success": 5,
+                    "failure": 0,
+                    "pending": 0,
+                    "installing": 0,
                 }
 
             @property
@@ -220,8 +278,8 @@ class TestGetDeploymentStatus:
         result = get_deployment_status(context, "deploy-12345")
 
         assert result is not None
-        assert result["status"]["success"] == 5
-        assert result["status"]["failure"] == 0
+        assert result["success"] == 5
+        assert result["failure"] == 0
 
     def test_get_deployment_status_no_pat(self):
         """Test get_deployment_status returns None when mender_pat is not set."""
@@ -272,19 +330,15 @@ class TestWaitForDeployment:
     def test_wait_for_deployment_success(self, monkeypatch):
         """Test wait_for_deployment returns True on success."""
 
-        call_count = 0
-
         class MockResponse:
             status_code = 200
 
             def json(self):
                 return {
-                    "status": {
-                        "success": 1,
-                        "failure": 0,
-                        "pending": 0,
-                        "installing": 0,
-                    }
+                    "success": 1,
+                    "failure": 0,
+                    "pending": 0,
+                    "installing": 0,
                 }
 
             @property
@@ -322,12 +376,10 @@ class TestWaitForDeployment:
 
             def json(self):
                 return {
-                    "status": {
-                        "success": 0,
-                        "failure": 1,
-                        "pending": 0,
-                        "installing": 0,
-                    }
+                    "success": 0,
+                    "failure": 1,
+                    "pending": 0,
+                    "installing": 0,
                 }
 
             @property
@@ -367,12 +419,10 @@ class TestWaitForDeployment:
 
             def json(self):
                 return {
-                    "status": {
-                        "success": 0,
-                        "failure": 0,
-                        "pending": 1,
-                        "installing": 0,
-                    }
+                    "success": 0,
+                    "failure": 0,
+                    "pending": 1,
+                    "installing": 0,
                 }
 
             @property
