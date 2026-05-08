@@ -1,7 +1,7 @@
 """Unit tests for the LifecycleHelper class."""
 
 import uuid
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, patch
 
 from pathlib import Path
 from types import SimpleNamespace
@@ -31,6 +31,7 @@ def mock_context():
             "/tmp/test/cache/manifests/test-manifest/previous_artifact.json"
         ),
         cache=False,
+        wait_for_deploy=False,
     )
 
 
@@ -166,61 +167,6 @@ class TestCreateArtifact:
             )
 
 
-class TestUploadArtifact:
-    """Tests for the upload_artifact method."""
-
-    def test_upload_artifact_calls_api(self, mock_context):
-        """Test upload_artifact calls the Mender API with correct parameters."""
-        mock_context.mender_host = "https://hosted.mender.io"
-        mock_context.logger = MagicMock()
-
-        artifact = MagicMock()
-        artifact.filename = Path("/tmp/test-artifact.mender")
-        artifact.name = "test-manifest-1.0.0"
-
-        helper = LifecycleHelper.__new__(LifecycleHelper)
-        helper.context = mock_context
-
-        with patch(
-            "mender_docker_lifecycle_helper.helper.call_mender_host_api"
-        ) as mock_call_api:
-            with patch("builtins.open", mock_open(read_data=b"fake artifact data")):
-                with patch("pathlib.Path.stat") as mock_stat:
-                    mock_stat.return_value.st_size = 100
-
-                    helper.upload_artifact(artifact)
-
-                    assert mock_call_api.call_count == 1
-                    call_args = mock_call_api.call_args
-                    assert call_args[0][0] == mock_context
-                    assert call_args[0][1] == "deployments/artifacts"
-                    assert call_args[0][2]["data"]["size"] == 100
-                    assert call_args[0][2]["data"]["description"] == "string"
-                    assert "artifact" in call_args[0][2]["files"]
-
-    def test_upload_artifact_logs_info(self, mock_context):
-        """Test upload_artifact logs appropriate info message."""
-        mock_context.logger = MagicMock()
-
-        artifact = MagicMock()
-        artifact.filename = Path("/tmp/test-artifact.mender")
-        artifact.name = "test-manifest-1.0.0"
-
-        helper = LifecycleHelper.__new__(LifecycleHelper)
-        helper.context = mock_context
-
-        with patch("mender_docker_lifecycle_helper.helper.call_mender_host_api"):
-            with patch("builtins.open", mock_open(read_data=b"fake artifact data")):
-                with patch("pathlib.Path.stat") as mock_stat:
-                    mock_stat.return_value.st_size = 100
-
-                    helper.upload_artifact(artifact)
-
-                    mock_context.logger.info.assert_called_once_with(
-                        f"Uploaded artifact {artifact.filename}"
-                    )
-
-
 class TestDeployArtifact:
     """Tests for the deploy_artifact method."""
 
@@ -311,7 +257,9 @@ class TestPrepArtifact:
 
             with patch.object(helper, "create_artifact") as mock_create:
                 mock_create.return_value = mock_artifact
-                with patch.object(helper, "upload_artifact") as mock_upload:
+                with patch(
+                    "mender_docker_lifecycle_helper.helper.upload_artifact"
+                ) as mock_upload:
                     with patch(
                         "mender_docker_lifecycle_helper.helper.ArtifactMetadata"
                     ) as mock_metadata_class:
@@ -359,7 +307,9 @@ class TestPrepArtifact:
 
             with patch.object(helper, "create_artifact") as mock_create:
                 mock_create.return_value = mock_artifact
-                with patch.object(helper, "upload_artifact") as mock_upload:
+                with patch(
+                    "mender_docker_lifecycle_helper.helper.upload_artifact"
+                ) as mock_upload:
                     with patch(
                         "mender_docker_lifecycle_helper.helper.ArtifactMetadata"
                     ) as mock_metadata_class:
@@ -410,7 +360,9 @@ class TestPrepArtifact:
 
             with patch.object(helper, "create_artifact") as mock_create:
                 mock_create.return_value = mock_artifact
-                with patch.object(helper, "upload_artifact") as mock_upload:
+                with patch(
+                    "mender_docker_lifecycle_helper.helper.upload_artifact"
+                ) as mock_upload:
                     with patch.object(helper, "deploy_artifact") as mock_deploy:
                         with patch(
                             "mender_docker_lifecycle_helper.helper.ArtifactMetadata"
@@ -461,7 +413,9 @@ class TestPrepArtifact:
 
             with patch.object(helper, "create_artifact") as mock_create:
                 mock_create.return_value = mock_artifact
-                with patch.object(helper, "upload_artifact") as mock_upload:
+                with patch(
+                    "mender_docker_lifecycle_helper.helper.upload_artifact"
+                ) as mock_upload:
                     with patch.object(helper, "deploy_artifact") as mock_deploy:
                         with patch(
                             "mender_docker_lifecycle_helper.helper.ArtifactMetadata"

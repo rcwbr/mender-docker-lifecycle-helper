@@ -4,7 +4,10 @@ from pathlib import Path
 
 from types import SimpleNamespace
 
-from mender_docker_lifecycle_helper.utils.mender_server import call_mender_host_api
+from mender_docker_lifecycle_helper.utils.mender_server import (
+    call_mender_host_api,
+    upload_artifact,
+)
 from mender_docker_lifecycle_helper.artifact_metadata import ArtifactMetadata
 from mender_docker_lifecycle_helper.context import LifecycleHelperContext
 from mender_docker_lifecycle_helper.artifact import LifecycleHelperArtifact
@@ -45,27 +48,6 @@ class LifecycleHelper:
         artifact.gen_artifact_file()
         self.context.logger.info("Artifact file generated successfully.")
         return artifact
-
-    def upload_artifact(self, artifact: LifecycleHelperArtifact) -> None:
-        """
-        Upload the specified artifact file to the Mender server.
-
-        :param artifact: The object of the artifact to upload to the Mender server.
-        :return: None
-        """
-        with open(artifact.filename, "rb") as file_contents:
-            call_mender_host_api(
-                self.context,
-                "deployments/artifacts",
-                {
-                    "data": {
-                        "size": artifact.filename.stat().st_size,
-                        "description": "string",
-                    },
-                    "files": {"artifact": file_contents},
-                },
-            )
-            self.context.logger.info(f"Uploaded artifact {artifact.filename}")
 
     def deploy_artifact(self, artifact: LifecycleHelperArtifact) -> None:
         """
@@ -114,7 +96,7 @@ class LifecycleHelper:
             services=LifecycleHelperArtifact.gen_artifact_services(self.context),
         )
         artifact = self.create_artifact(artifact_metadata)
-        self.upload_artifact(artifact)
+        upload_artifact(self.context, artifact)
 
         if self.context.device_group is not None:
             self.deploy_artifact(artifact)
