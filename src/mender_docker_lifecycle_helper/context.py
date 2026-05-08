@@ -60,8 +60,6 @@ class LifecycleHelperContext:
 
         if self.cache:
             self.cache_dir = self._prep_cache_dir(args.cache_dir)
-            self.temp_dir = self.cache_dir / "temp"
-            self.temp_dir.mkdir()
             manifests_cache_dir = self.cache_dir / "manifests"
             manifests_cache_dir.mkdir(exist_ok=True)
             manifest_cache_dir = manifests_cache_dir / self.manifest_name
@@ -69,7 +67,13 @@ class LifecycleHelperContext:
             self.cache_artifact_metadata_file = (
                 manifest_cache_dir / "previous_artifact.json"
             )
-            self.image_cache = ImageCache(self.cache_dir / "images")
+        else:
+            self.cache_dir = Path(
+                self.repo_root_dir / ".mender-docker-lifecycle-helper"
+            )
+        self.image_cache = ImageCache(self.cache_dir / "images")
+        self.temp_dir = self.cache_dir / "temp"
+        self.temp_dir.mkdir(parents=True)
 
         if self.delta:
             self.previous_artifact_metadata = self._prep_previous_artifact_metadata(
@@ -77,16 +81,9 @@ class LifecycleHelperContext:
             )
 
     def __del__(self):
-        if self.cache:
-            shutil.rmtree(self.temp_dir)
-        # services_changed = False
-        # for service_name, service in manifest.services.items():
-        #     if (
-        #         service_name not in previous_artifact_metadata.services
-        #         or previous_artifact_metadata.services[service_name]["image"]["ref"] != service["image"]
-        #     ):
-        #         services_changed = True
-        # TODO support manifest-only artifact if services not changed
+        shutil.rmtree(self.temp_dir)
+        if not self.cache:
+            shutil.rmtree(self.cache_dir)
 
     @staticmethod
     def _default_cache_dir(
