@@ -116,9 +116,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4.1.7
       - name: pytest-cov
+        env:
+          DEVCONTAINER_HOST_WORKSPACE_MOUNT: ${{ github.workspace }}
+          DEVCONTAINER_WORKSPACE_PATH: ${{ github.workspace }}
+          PYTEST_DEBUG_TEMPROOT: ${{ runner.temp }}
         run: |
           pip install -e .
-          pytest --cov=src --cov-branch --cov-report=xml --junitxml=junit.xml
+          pytest \
+            --cov=src \
+            --cov-branch \
+            --cov-report=xml \
+            --junitxml=junit.xml \
+            -vv \
+            --tb=long \
+            -o log_cli=true \
+            -o log_cli_level=DEBUG \
+            tests/unit
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5.5.1
         with:

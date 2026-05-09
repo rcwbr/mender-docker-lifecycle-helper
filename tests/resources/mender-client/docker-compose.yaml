@@ -1,0 +1,42 @@
+services:
+  mender-client-setup:
+    image: ghcr.io/rcwbr/mender-client-docker:0.6.2
+    container_name: mender-client-setup
+    environment:
+      DEVICE_TYPE: ${DEVICE_TYPE}
+      MENDER_HOST: ${MENDER_HOST}
+      TENANT_TOKEN: ${TENANT_TOKEN}
+    entrypoint: /setup-entrypoint
+    volumes:
+      - mender-client-config:/etc/mender
+      - mender-client-data:/var/lib/mender
+      - ${MENDER_CLIENT_KEY}:/var/lib/mender/mender-agent.pem
+      - ${MENDER_HOST_CERT}:/etc/ssl/certs/ca-certificates.crt
+    networks:
+      mender_default:
+        mac_address: ${CLIENT_MAC_ADDRESS}
+  mender-client:
+    image: ghcr.io/rcwbr/mender-client-docker:0.6.2
+    container_name: mender-client
+    volumes:
+      - mender-client-config:/etc/mender
+      - mender-client-data:/var/lib/mender
+      - ${MENDER_CLIENT_KEY}:/var/lib/mender/mender-agent.pem
+      - ${MENDER_HOST_CERT}:/etc/ssl/certs/ca-certificates.crt
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: always
+    depends_on:
+      mender-client-setup:
+        condition: service_completed_successfully
+    networks:
+      mender_default:
+        mac_address: ${CLIENT_MAC_ADDRESS}
+
+networks:
+  mender_default:
+    name: mender_default
+    external: true
+
+volumes:
+  mender-client-config:
+  mender-client-data:
