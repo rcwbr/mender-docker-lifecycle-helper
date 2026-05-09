@@ -11,6 +11,8 @@ from unittest.mock import patch, MagicMock, mock_open
 from mender_docker_lifecycle_helper.utils.mender_server import (
     call_mender_host_api,
     upload_artifact,
+    get_deployment_status,
+    wait_for_deployment,
 )
 
 
@@ -410,3 +412,293 @@ class TestUploadArtifact:
                     mock_context.logger.info.assert_called_once_with(
                         f"Uploaded artifact {artifact.filename}"
                     )
+
+
+class TestGetDeploymentStatus:
+    """Tests for the get_deployment_status function."""
+
+    def test_get_deployment_status_success(self, monkeypatch):
+        """Test get_deployment_status returns stats on success."""
+
+        class MockResponse:
+            status_code = 200
+
+            def json(self):
+                return {
+                    "success": 5,
+                    "failure": 0,
+                    "pending": 0,
+                    "installing": 0,
+                }
+
+            @property
+            def request(self):
+                return SimpleNamespace(url="", headers={})
+
+        def mock_get(*args, **kwargs):
+            return MockResponse()
+
+        monkeypatch.setattr(
+            "mender_docker_lifecycle_helper.utils.mender_server.requests.get",
+            mock_get,
+        )
+
+        context = SimpleNamespace(
+            mender_pat="test-pat-token",
+            mender_host="https://hosted.mender.io",
+            logger=logging.Logger("test_logger"),
+        )
+
+        result = get_deployment_status(context, "deploy-12345")
+
+        assert result is not None
+        assert result["success"] == 5
+        assert result["failure"] == 0
+
+    def test_get_deployment_status_no_pat(self):
+        """Test get_deployment_status returns None when mender_pat is not set."""
+        context = SimpleNamespace(
+            mender_pat=None,
+            mender_host="https://hosted.mender.io",
+            logger=logging.Logger("test_logger"),
+        )
+
+        result = get_deployment_status(context, "deploy-12345")
+        assert result is None
+
+    def test_get_deployment_status_failure(self, monkeypatch):
+        """Test get_deployment_status raises error on non-200 status."""
+
+        class MockResponse:
+            status_code = 404
+            text = "Not Found"
+
+            def raise_for_status(self):
+                raise requests.HTTPError("404 Client Error")
+
+            @property
+            def request(self):
+                return SimpleNamespace(url="", headers={})
+
+        def mock_get(*args, **kwargs):
+            return MockResponse()
+
+        monkeypatch.setattr(
+            "mender_docker_lifecycle_helper.utils.mender_server.requests.get",
+            mock_get,
+        )
+
+        context = SimpleNamespace(
+            mender_pat="test-pat-token",
+            mender_host="https://hosted.mender.io",
+            logger=logging.Logger("test_logger"),
+        )
+
+        with pytest.raises(requests.HTTPError):
+            get_deployment_status(context, "deploy-12345")
+
+
+class TestWaitForDeployment:
+    """Tests for the wait_for_deployment function."""
+
+    def test_wait_for_deployment_success(self, monkeypatch):
+        """Test wait_for_deployment returns True on success."""
+
+        class MockResponse:
+            status_code = 200
+
+            def json(self):
+                return {
+                    "success": 1,
+                    "failure": 0,
+                    "pending": 0,
+                    "installing": 0,
+                }
+
+            @property
+            def request(self):
+                return SimpleNamespace(url="", headers={})
+
+        def mock_get(*args, **kwargs):
+            return MockResponse()
+
+        monkeypatch.setattr(
+            "mender_docker_lifecycle_helper.utils.mender_server.requests.get",
+            mock_get,
+        )
+        monkeypatch.setattr(
+            "mender_docker_lifecycle_helper.utils.mender_server.time.sleep",
+            lambda x: None,
+        )
+
+        context = SimpleNamespace(
+            mender_pat="test-pat-token",
+            mender_host="https://hosted.mender.io",
+            logger=MagicMock(),
+        )
+
+        result = wait_for_deployment(
+            context, "deploy-12345", poll_interval=1, timeout=10
+        )
+        assert result is True
+
+    def test_wait_for_deployment_failure(self, monkeypatch):
+        """Test wait_for_deployment returns False on failure."""
+
+        class MockResponse:
+            status_code = 200
+
+            def json(self):
+                return {
+                    "success": 0,
+                    "failure": 1,
+                    "pending": 0,
+                    "installing": 0,
+                }
+
+            @property
+            def request(self):
+                return SimpleNamespace(url="", headers={})
+
+        def mock_get(*args, **kwargs):
+            return MockResponse()
+
+        monkeypatch.setattr(
+            "mender_docker_lifecycle_helper.utils.mender_server.requests.get",
+            mock_get,
+        )
+        monkeypatch.setattr(
+            "mender_docker_lifecycle_helper.utils.mender_server.time.sleep",
+            lambda x: None,
+        )
+
+        context = SimpleNamespace(
+            mender_pat="test-pat-token",
+            mender_host="https://hosted.mender.io",
+            logger=MagicMock(),
+        )
+
+        result = wait_for_deployment(
+            context, "deploy-12345", poll_interval=1, timeout=10
+        )
+        assert result is False
+
+    def test_wait_for_deployment_timeout(self, monkeypatch):
+        """Test wait_for_deployment returns False on timeout."""
+        time_values = [0, 0, 11]  # start_time=0, loop check=0 (enter), then 11 (exit)
+        time_index = [0]
+
+        class MockResponse:
+            status_code = 200
+
+            def json(self):
+                return {
+                    "success": 0,
+                    "failure": 0,
+                    "pending": 1,
+                    "installing": 0,
+                }
+
+            @property
+            def request(self):
+                return SimpleNamespace(url="", headers={})
+
+        def mock_get(*args, **kwargs):
+            return MockResponse()
+
+        def mock_time():
+            idx = time_index[0]
+            time_index[0] += 1
+            return time_values[min(idx, len(time_values) - 1)]
+
+        monkeypatch.setattr(
+            "mender_docker_lifecycle_helper.utils.mender_server.requests.get",
+            mock_get,
+        )
+        monkeypatch.setattr(
+            "mender_docker_lifecycle_helper.utils.mender_server.time.sleep",
+            lambda x: None,
+        )
+        monkeypatch.setattr(
+            "mender_docker_lifecycle_helper.utils.mender_server.time.time",
+            mock_time,
+        )
+
+        context = SimpleNamespace(
+            mender_pat="test-pat-token",
+            mender_host="https://hosted.mender.io",
+            logger=MagicMock(),
+        )
+
+        result = wait_for_deployment(
+            context, "deploy-12345", poll_interval=1, timeout=10
+        )
+        assert result is False
+
+    def test_wait_for_deployment_no_pat(self):
+        """Test wait_for_deployment returns False when mender_pat is not set."""
+        context = SimpleNamespace(
+            mender_pat=None,
+            mender_host="https://hosted.mender.io",
+            logger=MagicMock(),
+        )
+
+        result = wait_for_deployment(context, "deploy-12345")
+        assert result is False
+
+    def test_wait_for_deployment_all_stats_zero(self, monkeypatch):
+        """Test wait_for_deployment handles all stats being zero (no results yet case)."""
+        time_values = [0, 0, 11]  # start_time=0, loop check=0 (enter), then 11 (exit)
+        time_index = [0]
+
+        class MockResponse:
+            status_code = 200
+
+            def json(self):
+                return {
+                    "success": 0,
+                    "failure": 0,
+                    "pending": 0,
+                    "installing": 0,
+                }
+
+            @property
+            def request(self):
+                return SimpleNamespace(url="", headers={})
+
+        def mock_get(*args, **kwargs):
+            return MockResponse()
+
+        def mock_time():
+            idx = time_index[0]
+            time_index[0] += 1
+            return time_values[min(idx, len(time_values) - 1)]
+
+        monkeypatch.setattr(
+            "mender_docker_lifecycle_helper.utils.mender_server.requests.get",
+            mock_get,
+        )
+        monkeypatch.setattr(
+            "mender_docker_lifecycle_helper.utils.mender_server.time.sleep",
+            lambda x: None,
+        )
+        monkeypatch.setattr(
+            "mender_docker_lifecycle_helper.utils.mender_server.time.time",
+            mock_time,
+        )
+
+        context = SimpleNamespace(
+            mender_pat="test-pat-token",
+            mender_host="https://hosted.mender.io",
+            logger=MagicMock(),
+        )
+
+        result = wait_for_deployment(
+            context, "deploy-12345", poll_interval=1, timeout=10
+        )
+        assert result is False  # Returns False on timeout
+
+        # Verify the debug log for "no results yet" was called
+        context.logger.debug.assert_any_call(
+            "Deployment deploy-12345 has no results yet."
+        )

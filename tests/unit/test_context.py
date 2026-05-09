@@ -31,6 +31,7 @@ def dummy_args():
         release="release",
         service_files="service_files",
         service_images="service_images",
+        wait_for_deploy=True,
     )
 
 
@@ -374,6 +375,7 @@ class TestLifecycleHelperContextInitIntegration:
                 release=False,
                 service_files=None,
                 service_images=None,
+                wait_for_deploy=True,
             )
         )
         assert context.artifact_filename == None
@@ -467,6 +469,7 @@ class TestLifecycleHelperContextInitIntegration:
                 release=False,
                 service_files=None,
                 service_images=None,
+                wait_for_deploy=True,
             )
         )
         assert context.artifact_filename == None
@@ -560,6 +563,7 @@ class TestLifecycleHelperContextInitIntegration:
                 release=True,
                 service_files=None,
                 service_images=None,
+                wait_for_deploy=True,
             )
         )
         assert context.artifact_filename == None
@@ -589,20 +593,26 @@ class TestLifecycleHelperContextInitIntegration:
 class TestMenderPAT:
     """Tests for the mender_pat field."""
 
-    def test_mender_pat_from_env(self, monkeypatch):
+    def test_mender_pat_from_env(self, tmp_path, monkeypatch):
         """Test that mender_pat is read from MENDER_PAT env var."""
         monkeypatch.setenv("MENDER_PAT", "my-pat-token")
+        temp_dir = tmp_path / "temp"
+        temp_dir.mkdir()
         context = LifecycleHelperContext.__new__(LifecycleHelperContext)
         context.mender_pat = os.getenv("MENDER_PAT")
-        context.cache = False  # Avoid AttributeError in __del__
+        context.cache = True  # Avoid __del__ attempting to remove cache_dir
+        context.temp_dir = temp_dir  # Use real temp_dir for __del__ cleanup
         assert context.mender_pat == "my-pat-token"
 
-    def test_mender_pat_not_set(self, monkeypatch):
+    def test_mender_pat_not_set(self, tmp_path, monkeypatch):
         """Test that mender_pat is None when MENDER_PAT is not set."""
         monkeypatch.delenv("MENDER_PAT", raising=False)
+        temp_dir = tmp_path / "temp"
+        temp_dir.mkdir()
         context = LifecycleHelperContext.__new__(LifecycleHelperContext)
         context.mender_pat = os.getenv("MENDER_PAT")
-        context.cache = False  # Avoid AttributeError in __del__
+        context.cache = True  # Avoid __del__ attempting to remove cache_dir
+        context.temp_dir = temp_dir  # Use real temp_dir for __del__ cleanup
         assert context.mender_pat is None
 
 
