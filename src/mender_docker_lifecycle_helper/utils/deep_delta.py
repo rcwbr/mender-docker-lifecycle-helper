@@ -160,9 +160,12 @@ def oci_deep_delta(
         # Remove the layer file from the delta dir
         delta_layer_path.unlink()
 
-        # Write source layer reference in the delta dir
+        # Write source layer reference in the delta dir.
+        # The .source file must contain the relative path from the image root to the source blob,
+        # because the docker-compose module prepends current_image_dir to this value.
+        source_relative_path = from_layers[i].relative_to(from_dir)
         with open(source_path, "w") as f:
-            f.write(from_layers[i].name)
+            f.write(str(source_relative_path))
 
     delta_file = delta_dir / delta_filename
     logger.debug(f"Layer diffing complete, creating delta file {delta_file}...")

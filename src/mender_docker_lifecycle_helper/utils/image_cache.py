@@ -164,9 +164,15 @@ class ImageCache:
                 image_index = json.load(index_file)
 
             image_manifest = image_index.get("manifests", [{}])[0]
-            image_ref = image_manifest.get("annotations", {}).get(
+            # Check index annotations first (for index-descriptor annotations from buildx)
+            # then fall back to manifest annotations
+            image_ref = image_index.get("annotations", {}).get(
                 "io.containerd.image.name", None
             )
+            if image_ref is None:
+                image_ref = image_manifest.get("annotations", {}).get(
+                    "io.containerd.image.name", None
+                )
             image_hash = image_manifest.get("digest", None)
             if image_hash is not None:
                 image_hash = image_hash.removeprefix(f"{HASH_PREFIX}:")
