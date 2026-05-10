@@ -42,14 +42,14 @@ plugins:
             show_inheritance_diagram: true
   - search
 theme:
-  favicon: TODO
+  favicon: assets/logo.svg
   features:
     - content.code.copy
     - search.highlight
     - search.share
     - versioning
+  logo: assets/logo-white.svg
   icon:
-    logo: fontawesome/solid/arrows-turn-to-dots
     repo: fontawesome/brands/github
   name: material
   palette:
