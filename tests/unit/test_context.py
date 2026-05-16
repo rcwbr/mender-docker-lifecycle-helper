@@ -1398,7 +1398,7 @@ class TestComposeContentFromFile:
         assert result == expected
 
     def test_compose_content_propagates_docker_error(self, tmp_path, monkeypatch):
-        """Test _compose_content_from_file propagates docker compose config errors."""
+        """Test _compose_content_from_file raises RuntimeError with stderr on docker compose config error."""
 
         compose_file = tmp_path / "docker-compose.yaml"
         compose_file.write_text(yaml.dump({"services": {"web": {"image": "nginx"}}}))
@@ -1414,7 +1414,7 @@ class TestComposeContentFromFile:
             "mender_docker_lifecycle_helper.context.subprocess.run", mock_run
         )
 
-        with pytest.raises(subprocess.CalledProcessError):
+        with pytest.raises(RuntimeError, match="not a valid compose file"):
             LifecycleHelperContext._compose_content_from_file(context, compose_file)
 
 

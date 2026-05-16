@@ -275,21 +275,25 @@ class LifecycleHelperContext:
 
         :param compose_file: The path to the Compose YAML file to read.
         :return: The normalized compose content as a dict with all directives resolved.
-        :raises subprocess.CalledProcessError: If docker compose config fails.
+        :raises RuntimeError: If docker compose config fails.
         :raises yaml.YAMLError: If the output cannot be parsed as YAML.
         """
-        result = subprocess.run(
-            [
-                DOCKER_BIN,
-                "compose",
-                "--file",
-                str(compose_file),
-                "config",
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+        try:
+            result = subprocess.run(
+                [
+                    DOCKER_BIN,
+                    "compose",
+                    "--file",
+                    str(compose_file),
+                    "config",
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        except subprocess.CalledProcessError as e:
+            error_msg = f"Failed to read compose file {compose_file}: {e.stderr}"
+            raise RuntimeError(error_msg) from e
         return yaml.safe_load(result.stdout)
 
     def _artifact_services_metadata_from_compose(
