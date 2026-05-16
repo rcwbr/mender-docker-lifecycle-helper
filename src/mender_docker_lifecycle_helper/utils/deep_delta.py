@@ -8,7 +8,6 @@ import subprocess
 import tarfile
 
 from pathlib import Path
-from typing import Optional
 
 from mender_docker_lifecycle_helper.utils.container_utils import HASH_PREFIX
 
@@ -22,7 +21,7 @@ class ImageDeltaException(Exception):
 def _read_layers_from_manifest(
     image_dir: Path,
     target_platform: str,
-    logger: Optional[logging.Logger] = logging.getLogger(__name__),
+    logger: logging.Logger | None = logging.getLogger(__name__),
 ) -> list[Path]:
     """
     Reads the layers from an OCI image manifest file.
@@ -89,8 +88,8 @@ def oci_deep_delta(
     delta_dir: Path,
     delta_filename: str,
     target_platform: str,
-    delta_cmd: Optional[list[str]] = XDELTA_CMD,
-    logger: Optional[logging.Logger] = logging.getLogger(__name__),
+    delta_cmd: list[str] | None = XDELTA_CMD,
+    logger: logging.Logger | None = logging.getLogger(__name__),
 ) -> Path:
     """
     Generate deep delta between OCI images.

@@ -5,7 +5,6 @@ import shutil
 import tarfile
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 from mender_docker_lifecycle_helper.utils.container_utils import (
     HASH_PREFIX,
@@ -35,11 +34,11 @@ class ImageCache:
     def __init__(
         self,
         cache_dir: Path,
-        delta_cache_dirname: Optional[str] = DELTA_CACHE_DIRNAME,
-        extract_cache_dirname: Optional[str] = EXTRACT_CACHE_DIRNAME,
-        image_file_name: Optional[str] = IMAGE_FILE_NAME,
-        save_cache_dirname: Optional[str] = SAVE_CACHE_DIRNAME,
-        logger: Optional[logging.Logger] = logging.getLogger(__name__),
+        delta_cache_dirname: str | None = DELTA_CACHE_DIRNAME,
+        extract_cache_dirname: str | None = EXTRACT_CACHE_DIRNAME,
+        image_file_name: str | None = IMAGE_FILE_NAME,
+        save_cache_dirname: str | None = SAVE_CACHE_DIRNAME,
+        logger: logging.Logger | None = logging.getLogger(__name__),
     ):
         """
         Construct an ImageCache object, reading cache dir contents into maps if present or creating them as empty dirs.
@@ -263,8 +262,8 @@ class ImageCache:
 
     def cleanup_by_mtime(
         self,
-        limit_size_bytes: Optional[int] = None,
-        disk_percent: Optional[float] = None,
+        limit_size_bytes: int | None = None,
+        disk_percent: float | None = None,
     ) -> int:
         """
         Remove oldest cached items to bring cache size at or below limit.

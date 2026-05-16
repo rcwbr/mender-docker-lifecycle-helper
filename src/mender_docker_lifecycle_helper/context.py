@@ -6,7 +6,6 @@ import tempfile
 
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Optional
 
 import git
 import yaml
@@ -342,7 +341,7 @@ class LifecycleHelperContext:
 
     def _prep_previous_artifact_metadata(
         self,
-        previous_version: Optional[str],
+        previous_version: str | None,
     ) -> ArtifactMetadata:
         """
         Determine the metadata of the previous artifact. If the cache is enabled and includes a metadata file from a previous helper execution, that data is used. If a previous version is specified, the metadata is extracted from the artifact compose manifest file at that version of the repository. If the execution is for a release, the metadata is extracted from the artifact compose manifest file at the previous (mainline) commit of the repo. Otherwise, the metadata is extracted from the artifact compose manifest file at the version of the repository as specified by the current repo version (as read from the version file).
