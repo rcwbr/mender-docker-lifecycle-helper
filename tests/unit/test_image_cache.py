@@ -658,3 +658,605 @@ class TestImageCacheExtractOciFile:
 
         assert "filter" in captured_params
         assert captured_params["filter"] == "tar"
+
+
+class TestImageCacheCleanup:
+    """Tests for ImageCache.cleanup_by_mtime method."""
+
+    def _create_cache_item(
+        self, cache_dir, item_type, hash1, hash2=None, size_bytes=100
+    ):
+        """Helper to create a cache item with specific size and modification time."""
+        if item_type == "save":
+            item_dir = cache_dir / "save" / hash1
+            item_dir.mkdir(parents=True)
+            image_file = item_dir / "image.img"
+            image_file.write_bytes(b"x" * size_bytes)
+            return image_file.parent
+        elif item_type == "extract":
+            item_dir = cache_dir / "extract" / hash1
+            item_dir.mkdir(parents=True)
+            dummy_file = item_dir / "dummy.txt"
+            dummy_file.write_bytes(b"x" * size_bytes)
+            return dummy_file.parent
+        elif item_type == "delta":
+            item_dir = cache_dir / "delta" / hash1 / hash2
+            item_dir.mkdir(parents=True)
+            image_file = item_dir / "image.img"
+            image_file.write_bytes(b"x" * size_bytes)
+            return image_file.parent
+
+    def test_cleanup_removes_oldest_items_first(self, tmp_path):
+        """Test that cleanup removes oldest items first (LRU behavior)."""
+        import time
+
+        cache = ImageCache(tmp_path)
+
+        # Create items with different ages
+        old_item = self._create_cache_item(tmp_path, "save", "old_hash", size_bytes=100)
+        time.sleep(0.01)
+        newer_item = self._create_cache_item(
+            tmp_path, "save", "newer_hash", size_bytes=100
+        )
+        time.sleep(0.01)
+        newest_item = self._create_cache_item(
+            tmp_path, "save", "newest_hash", size_bytes=100
+        )
+
+        # Set oldest item even older by touching it first, then waiting
+        time.sleep(0.01)
+        newest_item.touch()
+
+        # Cleanup to free 100 bytes - should remove oldest
+        bytes_freed = cache.cleanup_by_mtime(limit_size_bytes=200)
+
+        assert bytes_freed > 0
+        # Oldest item should be removed
+        assert not old_item.exists(), "Oldest item should be removed"
+        # Newer items should remain
+        assert newest_item.exists(), "Newest item should remain"
+
+    def test_cleanup_respects_limit_size(self, tmp_path):
+        """Test that cleanup respects size limit."""
+        cache = ImageCache(tmp_path)
+
+        # Create items totaling 300 bytes
+        item1 = self._create_cache_item(tmp_path, "save", "hash1", size_bytes=100)
+        item2 = self._create_cache_item(tmp_path, "save", "hash2", size_bytes=100)
+        item3 = self._create_cache_item(tmp_path, "save", "hash3", size_bytes=100)
+
+        # Calculate sizes
+        total_size = sum(
+            [
+                cache._get_dir_size(item1),
+                cache._get_dir_size(item2),
+                cache._get_dir_size(item3),
+            ]
+        )
+        # Cleanup to leave only 150 bytes
+        bytes_freed = cache.cleanup_by_mtime(limit_size_bytes=150)
+
+        assert bytes_freed > 0
+        remaining_size = cache._get_cache_size()
+        assert remaining_size <= 150, f"Expected <= 150 bytes, got {remaining_size}"
+
+    def test_cleanup_no_op_when_within_limit(self, tmp_path):
+        """Test that cleanup is a no-op when already within limits."""
+        cache = ImageCache(tmp_path)
+
+        # Create small cache items
+        self._create_cache_item(tmp_path, "save", "hash1", size_bytes=100)
+
+        # Cleanup with large limit - should do nothing
+        bytes_freed = cache.cleanup_by_mtime(limit_size_bytes=10000)
+        assert bytes_freed == 0
+
+    def test_cleanup_no_limit_returns_zero(self, tmp_path):
+        """Test that cleanup returns 0 when no limits specified."""
+        cache = ImageCache(tmp_path)
+
+        self._create_cache_item(tmp_path, "save", "hash1", size_bytes=100)
+
+        bytes_freed = cache.cleanup_by_mtime()
+        assert bytes_freed == 0
+
+    def test_cleanup_handles_extract_items(self, tmp_path):
+        """Test that cleanup properly handles extract cache items."""
+        cache = ImageCache(tmp_path)
+
+        # Create extract cache item
+        item = self._create_cache_item(
+            tmp_path, "extract", "extract_hash", size_bytes=100
+        )
+
+        bytes_freed = cache.cleanup_by_mtime(limit_size_bytes=50)
+        assert bytes_freed > 0
+        assert not item.exists()
+
+    def test_cleanup_handles_delta_items(self, tmp_path):
+        """Test that cleanup properly handles delta cache items."""
+        cache = ImageCache(tmp_path)
+
+        # Create delta cache item
+        item = self._create_cache_item(
+            tmp_path, "delta", "from_hash", "to_hash", size_bytes=100
+        )
+
+        bytes_freed = cache.cleanup_by_mtime(limit_size_bytes=50)
+        assert bytes_freed > 0
+        assert not item.exists()
+
+    def test_cleanup_synced_with_in_memory_caches(self, tmp_path):
+        """Test that cleanup removes entries from in-memory cache dicts."""
+        cache = ImageCache(tmp_path)
+
+        # Create and populate caches
+        item = self._create_cache_item(tmp_path, "save", "save_hash", size_bytes=100)
+        cache = ImageCache(tmp_path)  # Re-init to populate dicts from disk
+        assert "save_hash" in cache.save_cache
+
+        # Cleanup
+        cache.cleanup_by_mtime(limit_size_bytes=50)
+
+        # Verify in-memory dict is synced
+        assert "save_hash" not in cache.save_cache
+
+    def test_cleanup_preserves_newer_items(self, tmp_path):
+        """Test that newer items are preserved during cleanup."""
+        import time
+
+        cache = ImageCache(tmp_path)
+
+        # Create items at different times
+        old_item = self._create_cache_item(tmp_path, "save", "old", size_bytes=100)
+        time.sleep(0.02)
+        new_item = self._create_cache_item(tmp_path, "save", "new", size_bytes=100)
+
+        # Touch to ensure time difference
+        new_item.touch()
+
+        # Cleanup
+        cache.cleanup_by_mtime(limit_size_bytes=100)
+
+        # New item should remain (or both removed if total size exceeded)
+        # But newer should be preferred
+        assert (
+            new_item.exists() or not old_item.exists()
+        ), "Newer items should be preserved"
+
+    def test_cleanup_respects_percent_free(self, tmp_path, monkeypatch):
+        """Test that cleanup respects disk percent free threshold."""
+        cache = ImageCache(tmp_path)
+
+        # Create items totaling 300 bytes
+        item1 = self._create_cache_item(tmp_path, "save", "hash1", size_bytes=100)
+        item2 = self._create_cache_item(tmp_path, "save", "hash2", size_bytes=100)
+        item3 = self._create_cache_item(tmp_path, "save", "hash3", size_bytes=100)
+
+        # Mock disk stats: 1000 byte total disk, 100 free
+        # With 20% threshold, we need 200 free, so need to free 100 bytes
+        def mock_statvfs(path):
+            return type(
+                "statvfs",
+                (),
+                {
+                    "f_blocks": 10,  # 10 blocks
+                    "f_frsize": 100,  # 100 bytes per block = 1000 total
+                    "f_bavail": 1,  # 1 block free = 100 bytes free (only 10% free)
+                    "f_bfree": 1,
+                },
+            )()
+
+        monkeypatch.setattr("os.statvfs", mock_statvfs)
+
+        # With 20% threshold on 1000 byte disk, we need 200 free
+        # Only have 100 free, so need to free 100 bytes
+        bytes_freed = cache.cleanup_by_mtime(disk_percent=20, limit_size_bytes=None)
+
+        assert bytes_freed > 0, "Should have freed bytes to reach 20% free threshold"
+        # Verify that cleanup happened by checking cache size reduced
+        remaining_size = cache._get_cache_size()
+        assert remaining_size < 300, "Cache size should be reduced"
+
+    def test_cleanup_handles_missing_files(self, tmp_path, monkeypatch):
+        """Test that cleanup logs warning and continues when file removal fails."""
+        cache = ImageCache(tmp_path)
+
+        # Create items
+        item1 = self._create_cache_item(tmp_path, "save", "hash1", size_bytes=100)
+        item2 = self._create_cache_item(tmp_path, "save", "hash2", size_bytes=100)
+
+        # Re-init cache to ensure items are in the list
+        cache = ImageCache(tmp_path)
+
+        # Mock rmtree to always fail - cleanup should handle gracefully
+        def mock_rmtree(path, *args, **kwargs):
+            raise OSError("Simulated deletion failure")
+
+        # Patch where shutil is used (in the image_cache module)
+        monkeypatch.setattr(
+            "mender_docker_lifecycle_helper.utils.image_cache.shutil.rmtree",
+            mock_rmtree,
+        )
+
+        # Cleanup should not raise, should return 0 bytes freed
+        bytes_freed = cache.cleanup_by_mtime(limit_size_bytes=50)
+
+        # No bytes freed since all removals fail
+        assert bytes_freed == 0, "Should have freed 0 bytes when all removals fail"
+
+        # Items should still exist
+        assert item1.exists()
+        assert item2.exists()
+
+    def test_cleanup_mixed_item_types(self, tmp_path):
+        """Test that cleanup handles a mix of save, extract, and delta items."""
+        cache = ImageCache(tmp_path)
+
+        # Create items of different types
+        save_item = self._create_cache_item(
+            tmp_path, "save", "save_hash", size_bytes=100
+        )
+        extract_item = self._create_cache_item(
+            tmp_path, "extract", "extract_hash", size_bytes=100
+        )
+        delta_item = self._create_cache_item(
+            tmp_path, "delta", "from_hash", "to_hash", size_bytes=100
+        )
+
+        # Cleanup to free 150 bytes - should remove 2 items (oldest first)
+        bytes_freed = cache.cleanup_by_mtime(limit_size_bytes=150)
+
+        assert bytes_freed >= 100, "Should have freed at least 100 bytes"
+        # At least one item should be removed
+        remaining_items = sum(
+            [
+                (
+                    len(list((tmp_path / "save").iterdir()))
+                    if (tmp_path / "save").exists()
+                    else 0
+                ),
+                (
+                    len(list((tmp_path / "extract").iterdir()))
+                    if (tmp_path / "extract").exists()
+                    else 0
+                ),
+                (
+                    sum(
+                        len(list(d.iterdir()))
+                        for d in (tmp_path / "delta").iterdir()
+                        if d.is_dir()
+                    )
+                    if (tmp_path / "delta").exists()
+                    else 0
+                ),
+            ]
+        )
+        assert remaining_items <= 2, "Should have removed at least one item"
+
+    def test_cleanup_disk_percent_without_limit_size(self, tmp_path, monkeypatch):
+        """Test that cleanup works with disk_percent even without limit_size_bytes."""
+        cache = ImageCache(tmp_path)
+
+        # Create items totaling 300 bytes
+        self._create_cache_item(tmp_path, "save", "hash1", size_bytes=100)
+        self._create_cache_item(tmp_path, "save", "hash2", size_bytes=100)
+        self._create_cache_item(tmp_path, "save", "hash3", size_bytes=100)
+
+        # Mock disk stats: 1000 byte total disk, 50 free
+        # With 20% threshold, we need 200 free, so need to free 150 bytes
+        def mock_statvfs(path):
+            return type(
+                "statvfs",
+                (),
+                {
+                    "f_blocks": 10,
+                    "f_frsize": 100,
+                    "f_bavail": 0.5,  # 50 bytes free
+                    "f_bfree": 0.5,
+                },
+            )()
+
+        monkeypatch.setattr("os.statvfs", mock_statvfs)
+
+        # Cleanup should trigger based on disk_percent alone
+        bytes_freed = cache.cleanup_by_mtime(disk_percent=20)
+
+        assert bytes_freed > 0, "Should have freed bytes based on disk_percent"
+
+    def test_cleanup_empty_cache(self, tmp_path):
+        """Test that cleanup handles an empty cache without error."""
+        cache = ImageCache(tmp_path)
+
+        # No items created
+        bytes_freed = cache.cleanup_by_mtime(limit_size_bytes=100)
+
+        assert bytes_freed == 0
+
+    def test_get_cache_items_ordered_by_mtime(self, tmp_path):
+        """Test that _get_cache_items_by_mtime returns items sorted by oldest first."""
+        import time
+
+        cache = ImageCache(tmp_path)
+
+        # Create items at different times
+        item1 = self._create_cache_item(tmp_path, "save", "first", size_bytes=100)
+        time.sleep(0.01)
+        item2 = self._create_cache_item(tmp_path, "save", "second", size_bytes=100)
+        time.sleep(0.01)
+        item3 = self._create_cache_item(tmp_path, "save", "third", size_bytes=100)
+
+        items = cache._get_cache_items_by_mtime()
+
+        # Should be ordered oldest first
+        assert len(items) == 3
+        assert items[0][0].name == "first"
+        assert items[1][0].name == "second"
+        assert items[2][0].name == "third"
+
+    def test_cleanup_updates_in_memory_caches_after_mixed_removal(self, tmp_path):
+        """Test that cleanup syncs all in-memory caches after removing mixed item types."""
+        cache = ImageCache(tmp_path)
+
+        # Create items of each type
+        self._create_cache_item(tmp_path, "save", "save_hash", size_bytes=100)
+        self._create_cache_item(tmp_path, "extract", "extract_hash", size_bytes=100)
+        self._create_cache_item(
+            tmp_path, "delta", "from_hash", "to_hash", size_bytes=100
+        )
+
+        # Re-init to populate dicts from disk
+        cache = ImageCache(tmp_path)
+        assert "save_hash" in cache.save_cache
+        assert "extract_hash" in cache.extract_cache
+        assert "from_hash" in cache.delta_cache
+
+        # Cleanup to remove all items
+        cache.cleanup_by_mtime(limit_size_bytes=50)
+
+        # All caches should be empty
+        assert "save_hash" not in cache.save_cache
+        assert "extract_hash" not in cache.extract_cache
+        assert "from_hash" not in cache.delta_cache
+
+    def test_calculate_space_to_free_insufficient_cache(self, tmp_path, monkeypatch):
+        """Test _calculate_space_to_free_for_percent when cache is smaller than needed."""
+        cache = ImageCache(tmp_path)
+
+        # Create a small cache item (10 bytes)
+        self._create_cache_item(tmp_path, "save", "small_hash", size_bytes=10)
+
+        # Mock disk stats: 10000 byte total disk, need to free 5000 bytes for 50% threshold
+        # But cache only has ~10 bytes
+        def mock_statvfs(path):
+            return type(
+                "statvfs",
+                (),
+                {
+                    "f_blocks": 100,
+                    "f_frsize": 100,
+                    "f_bavail": 1,  # Only 100 bytes free
+                    "f_bfree": 1,
+                },
+            )()
+
+        monkeypatch.setattr("os.statvfs", mock_statvfs)
+
+        # Re-init cache to get accurate size
+        cache = ImageCache(tmp_path)
+        space_needed = cache._calculate_space_to_free_for_percent(
+            50, cache._get_cache_size()
+        )
+
+        # Should be capped at cache size (we can't free more than we have)
+        assert space_needed <= cache._get_cache_size()
+
+    def test_cleanup_partial_item_removes_whole_directory(self, tmp_path):
+        """Test that cleanup removes entire directory even if only partial space is needed."""
+        cache = ImageCache(tmp_path)
+
+        # Create a single large item (500 bytes)
+        item = self._create_cache_item(tmp_path, "save", "large_hash", size_bytes=500)
+
+        # Cleanup to free only 100 bytes
+        bytes_freed = cache.cleanup_by_mtime(limit_size_bytes=400)
+
+        # The entire 500-byte directory should be removed (not partial)
+        assert bytes_freed == 500
+        assert not item.exists()
+
+    def test_get_dir_size_empty_directory(self, tmp_path):
+        """Test that _get_dir_size returns 0 for empty directory."""
+        cache = ImageCache(tmp_path)
+        empty_dir = tmp_path / "empty"
+        empty_dir.mkdir()
+
+        size = cache._get_dir_size(empty_dir)
+
+        assert size == 0
+
+    def test_get_disk_stats_returns_dict(self, tmp_path):
+        """Test that _get_disk_stats returns correct dict structure."""
+        cache = ImageCache(tmp_path)
+        stats = cache._get_disk_stats()
+
+        assert "total" in stats
+        assert "free" in stats
+        assert stats["total"] > 0
+        assert stats["free"] >= 0
+
+    def test_calculate_space_to_free_no_cleanup_needed(self, tmp_path, monkeypatch):
+        """Test _calculate_space_to_free_for_percent returns 0 when already enough free space."""
+        cache = ImageCache(tmp_path)
+
+        # Mock disk stats: 1000 byte total disk, 500 free
+        # With 20% threshold, we need 200 free, but we have 500 free
+        # So additional_needed = 200 - 500 = -300 <= 0
+        def mock_statvfs(path):
+            return type(
+                "statvfs",
+                (),
+                {
+                    "f_blocks": 10,
+                    "f_frsize": 100,
+                    "f_bavail": 5,  # 500 bytes free
+                    "f_bfree": 5,
+                },
+            )()
+
+        monkeypatch.setattr("os.statvfs", mock_statvfs)
+
+        space_to_free = cache._calculate_space_to_free_for_percent(20, 1000)
+
+        # Should return 0 because we already have more free space than needed
+        assert space_to_free == 0
+
+    def test_calculate_space_to_free_exact_threshold(self, tmp_path, monkeypatch):
+        """Test _calculate_space_to_free_for_percent returns 0 when exactly at threshold."""
+        cache = ImageCache(tmp_path)
+
+        # Mock disk stats: 1000 byte total disk, exactly at threshold
+        # With 20% threshold, we need 200 free, and we have exactly 200 free
+        # So additional_needed = 200 - 200 = 0 <= 0
+        def mock_statvfs(path):
+            return type(
+                "statvfs",
+                (),
+                {
+                    "f_blocks": 10,
+                    "f_frsize": 100,
+                    "f_bavail": 2,  # 200 bytes free (exactly 20%)
+                    "f_bfree": 2,
+                },
+            )()
+
+        monkeypatch.setattr("os.statvfs", mock_statvfs)
+
+        space_to_free = cache._calculate_space_to_free_for_percent(20, 1000)
+
+        # Should return 0 because additional_needed = 0
+        assert space_to_free == 0
+
+    def test_sync_cache_dicts_on_cleanup_removes_missing_save_entries(self, tmp_path):
+        """Test that _sync_cache_dicts_on_cleanup removes save_cache entries for missing dirs."""
+        cache = ImageCache(tmp_path)
+
+        # Create and populate both caches
+        save_item = self._create_cache_item(
+            tmp_path, "save", "save_hash", size_bytes=100
+        )
+        cache = ImageCache(tmp_path)  # Re-init to populate dicts from disk
+        assert "save_hash" in cache.save_cache
+
+        # Manually remove the directory from filesystem
+        shutil.rmtree(tmp_path / "save" / "save_hash")
+
+        # Call sync method directly
+        cache._sync_cache_dicts_on_cleanup()
+
+        # Verify the in-memory dict entry is removed
+        assert "save_hash" not in cache.save_cache
+
+    def test_sync_cache_dicts_on_cleanup_removes_missing_extract_entries(
+        self, tmp_path
+    ):
+        """Test that _sync_cache_dicts_on_cleanup removes extract_cache entries for missing dirs."""
+        cache = ImageCache(tmp_path)
+
+        # Create and populate both caches
+        extract_item = self._create_cache_item(
+            tmp_path, "extract", "extract_hash", size_bytes=100
+        )
+        cache = ImageCache(tmp_path)  # Re-init to populate dicts from disk
+        assert "extract_hash" in cache.extract_cache
+
+        # Manually remove the directory from filesystem
+        shutil.rmtree(tmp_path / "extract" / "extract_hash")
+
+        # Call sync method directly
+        cache._sync_cache_dicts_on_cleanup()
+
+        # Verify the in-memory dict entry is removed
+        assert "extract_hash" not in cache.extract_cache
+
+    def test_sync_cache_dicts_on_cleanup_removes_missing_delta_entries(self, tmp_path):
+        """Test that _sync_cache_dicts_on_cleanup removes delta_cache entries for missing dirs."""
+        cache = ImageCache(tmp_path)
+
+        # Create and populate delta cache with two to_hashes to test nested removal
+        self._create_cache_item(
+            tmp_path, "delta", "from_hash", "to_hash1", size_bytes=100
+        )
+        self._create_cache_item(
+            tmp_path, "delta", "from_hash", "to_hash2", size_bytes=100
+        )
+        cache = ImageCache(tmp_path)  # Re-init to populate dicts from disk
+        assert "from_hash" in cache.delta_cache
+        assert "to_hash1" in cache.delta_cache["from_hash"]
+        assert "to_hash2" in cache.delta_cache["from_hash"]
+
+        # Manually remove only one to_hash directory from filesystem
+        shutil.rmtree(tmp_path / "delta" / "from_hash" / "to_hash1")
+
+        # Call sync method directly
+        cache._sync_cache_dicts_on_cleanup()
+
+        # Verify only the missing entry is removed, other entries remain
+        assert "to_hash1" not in cache.delta_cache["from_hash"]
+        assert "to_hash2" in cache.delta_cache["from_hash"]
+        # from_hash should still exist since to_hash2 is still there
+        assert "from_hash" in cache.delta_cache
+
+    def test_sync_cache_dicts_on_cleanup_removes_empty_delta_from_hash(self, tmp_path):
+        """Test that _sync_cache_dicts_on_cleanup removes empty from_hash entries."""
+        cache = ImageCache(tmp_path)
+
+        # Create and populate delta cache
+        delta_item = self._create_cache_item(
+            tmp_path, "delta", "from_hash", "to_hash", size_bytes=100
+        )
+        cache = ImageCache(tmp_path)  # Re-init to populate dicts from disk
+        assert "from_hash" in cache.delta_cache
+        assert "to_hash" in cache.delta_cache["from_hash"]
+
+        # Manually remove the only to_hash directory from filesystem
+        shutil.rmtree(tmp_path / "delta" / "from_hash" / "to_hash")
+
+        # Call sync method directly
+        cache._sync_cache_dicts_on_cleanup()
+
+        # Verify both to_hash and empty from_hash are removed
+        assert "to_hash" not in cache.delta_cache.get("from_hash", {})
+        assert "from_hash" not in cache.delta_cache
+
+    def test_sync_cache_dicts_on_cleanup_handles_all_item_types(self, tmp_path):
+        """Test that _sync_cache_dicts_on_cleanup handles mixed save, extract, and delta items."""
+        cache = ImageCache(tmp_path)
+
+        # Create all item types
+        save_item = self._create_cache_item(
+            tmp_path, "save", "save_hash", size_bytes=100
+        )
+        extract_item = self._create_cache_item(
+            tmp_path, "extract", "extract_hash", size_bytes=100
+        )
+        delta_item = self._create_cache_item(
+            tmp_path, "delta", "from_hash", "to_hash", size_bytes=100
+        )
+
+        # Re-init to populate dicts from disk
+        cache = ImageCache(tmp_path)
+        assert "save_hash" in cache.save_cache
+        assert "extract_hash" in cache.extract_cache
+        assert "from_hash" in cache.delta_cache
+
+        # Remove only the save item from filesystem
+        shutil.rmtree(tmp_path / "save" / "save_hash")
+
+        # Call sync method directly
+        cache._sync_cache_dicts_on_cleanup()
+
+        # Only save_cache should be synced, others should remain
+        assert "save_hash" not in cache.save_cache
+        assert "extract_hash" in cache.extract_cache
+        assert "from_hash" in cache.delta_cache

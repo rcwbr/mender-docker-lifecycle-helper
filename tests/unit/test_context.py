@@ -7,6 +7,7 @@ import os
 import pytest
 import subprocess
 import yaml
+from unittest.mock import MagicMock, patch
 
 from pathlib import Path
 from types import SimpleNamespace
@@ -20,6 +21,13 @@ def dummy_args():
         artifact_filename="artifact_filename",
         cache="cache",
         cache_dir="cache_dir",
+        cache_limit=True,
+        cache_limit_size=None,
+        cache_limit_percent=None,
+        cache_operation_only=False,
+        clear_cache=False,
+        clear_image_cache=False,
+        clean_cache=False,
         delta="delta",
         device_type="device_type",
         device_group="device_group",
@@ -369,6 +377,13 @@ class TestLifecycleHelperContextInitIntegration:
                 artifact_filename=None,
                 cache=True,
                 cache_dir=cache_dir,
+                cache_limit=True,
+                cache_limit_size=None,
+                cache_limit_percent=None,
+                cache_operation_only=False,
+                clear_cache=False,
+                clear_image_cache=False,
+                clean_cache=False,
                 delta=True,
                 device_type="virtual",
                 device_group="test-group",
@@ -477,6 +492,13 @@ class TestLifecycleHelperContextInitIntegration:
                 artifact_filename=None,
                 cache=False,
                 cache_dir=cache_dir,
+                cache_limit=True,
+                cache_limit_size=None,
+                cache_limit_percent=None,
+                cache_operation_only=False,
+                clear_cache=False,
+                clear_image_cache=False,
+                clean_cache=False,
                 delta=True,
                 device_type="virtual",
                 device_group="test-group",
@@ -585,6 +607,13 @@ class TestLifecycleHelperContextInitIntegration:
                 artifact_filename=None,
                 cache=False,
                 cache_dir=cache_dir,
+                cache_limit=True,
+                cache_limit_size=None,
+                cache_limit_percent=None,
+                cache_operation_only=False,
+                clear_cache=False,
+                clear_image_cache=False,
+                clean_cache=False,
                 delta=True,
                 device_type="virtual",
                 device_group="test-group",
@@ -1387,3 +1416,291 @@ class TestComposeContentFromFile:
 
         with pytest.raises(subprocess.CalledProcessError):
             LifecycleHelperContext._compose_content_from_file(context, compose_file)
+
+
+class TestCleanCache:
+    """Tests for the clean_cache method of LifecycleHelperContext."""
+
+    def test_clean_cache_with_size_limit(self, tmp_path):
+        """Test clean_cache passes size limit to image cache cleanup."""
+        context = LifecycleHelperContext.__new__(LifecycleHelperContext)
+        context.cache_dir = tmp_path / "cache"
+        context.logger = logging.Logger("test_logger")
+
+        with patch(
+            "mender_docker_lifecycle_helper.context.ImageCache"
+        ) as mock_image_cache_class:
+            mock_image_cache = MagicMock()
+            mock_image_cache.cleanup_by_mtime.return_value = 1024
+            mock_image_cache_class.return_value = mock_image_cache
+
+            context.image_cache = mock_image_cache
+            result = context.clean_cache(limit_size_bytes=500000, disk_percent=None)
+
+            mock_image_cache.cleanup_by_mtime.assert_called_once_with(
+                limit_size_bytes=500000, disk_percent=None
+            )
+            assert result == 1024
+
+    def test_clean_cache_with_disk_percent(self, tmp_path):
+        """Test clean_cache passes disk percent to image cache cleanup."""
+        context = LifecycleHelperContext.__new__(LifecycleHelperContext)
+        context.cache_dir = tmp_path / "cache"
+        context.logger = logging.Logger("test_logger")
+
+        with patch(
+            "mender_docker_lifecycle_helper.context.ImageCache"
+        ) as mock_image_cache_class:
+            mock_image_cache = MagicMock()
+            mock_image_cache.cleanup_by_mtime.return_value = 2048
+            mock_image_cache_class.return_value = mock_image_cache
+
+            context.image_cache = mock_image_cache
+            result = context.clean_cache(limit_size_bytes=None, disk_percent=75.0)
+
+            mock_image_cache.cleanup_by_mtime.assert_called_once_with(
+                limit_size_bytes=None, disk_percent=75.0
+            )
+            assert result == 2048
+
+    def test_clean_cache_with_no_limits(self, tmp_path):
+        """Test clean_cache returns 0 when no limits are specified."""
+        context = LifecycleHelperContext.__new__(LifecycleHelperContext)
+        context.cache_dir = tmp_path / "cache"
+        context.logger = logging.Logger("test_logger")
+
+        with patch(
+            "mender_docker_lifecycle_helper.context.ImageCache"
+        ) as mock_image_cache_class:
+            mock_image_cache = MagicMock()
+            mock_image_cache.cleanup_by_mtime.return_value = 0
+            mock_image_cache_class.return_value = mock_image_cache
+
+            context.image_cache = mock_image_cache
+            result = context.clean_cache(limit_size_bytes=None, disk_percent=None)
+
+            mock_image_cache.cleanup_by_mtime.assert_called_once_with(
+                limit_size_bytes=None, disk_percent=None
+            )
+            assert result == 0
+
+
+class TestClearImageCache:
+    """Tests for the clear_image_cache method of LifecycleHelperContext."""
+
+    def test_clear_image_cache_removes_directory(self, tmp_path):
+        """Test clear_image_cache removes the images cache directory."""
+        context = LifecycleHelperContext.__new__(LifecycleHelperContext)
+        context.cache_dir = tmp_path / "cache"
+
+        images_cache = context.cache_dir / "images"
+        context.image_cache = SimpleNamespace(cache_dir=images_cache)
+
+        with patch("pathlib.Path.exists", return_value=True):
+            with patch("shutil.rmtree") as mock_rmtree:
+                context.clear_image_cache()
+
+                # Verify rmtree was called
+                assert mock_rmtree.called
+
+
+class TestClearCache:
+    """Tests for the clear_cache method of LifecycleHelperContext."""
+
+    def test_clear_cache_removes_directory(self, tmp_path):
+        """Test clear_cache removes the entire cache directory."""
+        context = LifecycleHelperContext.__new__(LifecycleHelperContext)
+        context.cache_dir = tmp_path / "cache"
+
+        with patch("pathlib.Path.exists", return_value=True):
+            with patch("shutil.rmtree") as mock_rmtree:
+                context.clear_cache()
+
+                # Verify rmtree was called
+                assert mock_rmtree.called
+
+    def test_clear_cache_raises_when_not_exists(self, tmp_path):
+        """Test clear_cache raises FileNotFoundError when cache does not exist."""
+        context = LifecycleHelperContext.__new__(LifecycleHelperContext)
+        context.cache_dir = tmp_path / "cache"
+
+        with patch("pathlib.Path.exists", return_value=False):
+            with pytest.raises(
+                FileNotFoundError, match="Cache directory does not exist"
+            ):
+                context.clear_cache()
+
+
+class TestCacheOperationOnly:
+    """Tests for the cache_operation_only case in LifecycleHelperContext initialization."""
+
+    def test_init_cache_operation_only_clear_cache(self, tmp_path, monkeypatch):
+        """Test __init__ with cache_operation_only and clear_cache=True."""
+        monkeypatch.setenv("MENDER_PAT", "test-pat-token")
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir(parents=True)
+        (cache_dir / "some_file.txt").write_text("data")
+
+        context = LifecycleHelperContext(
+            SimpleNamespace(
+                artifact_filename=None,
+                cache=True,
+                cache_dir=cache_dir,
+                cache_limit=True,
+                cache_limit_size=None,
+                cache_limit_percent=None,
+                cache_operation_only=True,
+                clear_cache=True,
+                clear_image_cache=False,
+                clean_cache=False,
+                delta=False,
+                device_type="virtual",
+                device_group="test-group",
+                log_level="DEBUG",
+                manifest_file=tmp_path / "manifest.yaml",
+                manifest_name="test-manifest",
+                mender_host="https://hosted.mender.io",
+                platform="platform",
+                previous_version=None,
+                release=False,
+                service_files=None,
+                service_images=None,
+                wait_for_deploy=True,
+            )
+        )
+
+        # Cache directory should be cleared
+        assert not cache_dir.exists()
+
+    def test_init_cache_operation_only_clear_image_cache(self, tmp_path, monkeypatch):
+        """Test __init__ with cache_operation_only and clear_image_cache=True."""
+        monkeypatch.setenv("MENDER_PAT", "test-pat-token")
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir(parents=True)
+        images_dir = cache_dir / "images"
+        images_dir.mkdir()
+        (images_dir / "image1.tar").write_text("image data")
+
+        context = LifecycleHelperContext(
+            SimpleNamespace(
+                artifact_filename=None,
+                cache=True,
+                cache_dir=cache_dir,
+                cache_limit=True,
+                cache_limit_size=None,
+                cache_limit_percent=None,
+                cache_operation_only=True,
+                clear_cache=False,
+                clear_image_cache=True,
+                clean_cache=False,
+                delta=False,
+                device_type="virtual",
+                device_group="test-group",
+                log_level="DEBUG",
+                manifest_file=tmp_path / "manifest.yaml",
+                manifest_name="test-manifest",
+                mender_host="https://hosted.mender.io",
+                platform="platform",
+                previous_version=None,
+                release=False,
+                service_files=None,
+                service_images=None,
+                wait_for_deploy=True,
+            )
+        )
+
+        # Images directory should be cleared, but cache_dir should still exist
+        assert cache_dir.exists()
+        assert not images_dir.exists()
+
+    def test_init_cache_operation_only_clean_cache_with_size_limit(
+        self, tmp_path, monkeypatch
+    ):
+        """Test __init__ with cache_operation_only, clean_cache=True and a size limit."""
+        monkeypatch.setenv("MENDER_PAT", "test-pat-token")
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir(parents=True)
+        (cache_dir / "temp").mkdir()
+        (cache_dir / "manifests").mkdir()
+        images_dir = cache_dir / "images"
+        images_dir.mkdir()
+
+        with patch(
+            "mender_docker_lifecycle_helper.context.ImageCache"
+        ) as mock_image_cache_class:
+            mock_image_cache = MagicMock()
+            mock_image_cache.cleanup_by_mtime.return_value = 1024
+            mock_image_cache_class.return_value = mock_image_cache
+
+            context = LifecycleHelperContext(
+                SimpleNamespace(
+                    artifact_filename=None,
+                    cache=True,
+                    cache_dir=cache_dir,
+                    cache_limit=True,
+                    cache_limit_size=500000,
+                    cache_limit_percent=None,
+                    cache_operation_only=True,
+                    clear_cache=False,
+                    clear_image_cache=False,
+                    clean_cache=True,
+                    delta=False,
+                    device_type="virtual",
+                    device_group="test-group",
+                    log_level="DEBUG",
+                    manifest_file=tmp_path / "manifest.yaml",
+                    manifest_name="test-manifest",
+                    mender_host="https://hosted.mender.io",
+                    platform="platform",
+                    previous_version=None,
+                    release=False,
+                    service_files=None,
+                    service_images=None,
+                    wait_for_deploy=True,
+                )
+            )
+
+            mock_image_cache.cleanup_by_mtime.assert_called_once_with(
+                limit_size_bytes=500000, disk_percent=None
+            )
+
+    def test_init_cache_operation_only_clean_cache_no_limits(
+        self, tmp_path, monkeypatch
+    ):
+        """Test __init__ with cache_operation_only, clean_cache=True but no limits specified."""
+        monkeypatch.setenv("MENDER_PAT", "test-pat-token")
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir(parents=True)
+        (cache_dir / "temp").mkdir()
+        (cache_dir / "manifests").mkdir()
+
+        context = LifecycleHelperContext(
+            SimpleNamespace(
+                artifact_filename=None,
+                cache=True,
+                cache_dir=cache_dir,
+                cache_limit=True,
+                cache_limit_size=None,
+                cache_limit_percent=None,
+                cache_operation_only=True,
+                clear_cache=False,
+                clear_image_cache=False,
+                clean_cache=True,
+                delta=False,
+                device_type="virtual",
+                device_group="test-group",
+                log_level="DEBUG",
+                manifest_file=tmp_path / "manifest.yaml",
+                manifest_name="test-manifest",
+                mender_host="https://hosted.mender.io",
+                platform="platform",
+                previous_version=None,
+                release=False,
+                service_files=None,
+                service_images=None,
+                wait_for_deploy=True,
+            )
+        )
+
+        # Should return early without error - no attributes should be set beyond cache_dir
+        assert not hasattr(context, "manifest_file")

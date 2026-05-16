@@ -8,6 +8,34 @@ from mender_docker_lifecycle_helper.helper import LifecycleHelper
 
 
 @click.command(context_settings={"show_default": True})
+@click.version_option()
+@click.option(
+    "--clean-cache",
+    is_flag=True,
+    help="ONLY clean the cache directory (based on --cache-limit-size or --cache-limit-percent); do not perform any artifact operations.",
+)
+@click.option(
+    "--clear-image-cache",
+    is_flag=True,
+    help="Remove all image cache contents (save, extract, delta); do not perform any artifact operations.",
+)
+@click.option(
+    "--clear-cache",
+    is_flag=True,
+    help="Remove the entire cache directory; do not perform any artifact operations.",
+)
+@click.option(
+    "--cache-limit-size",
+    default=None,
+    type=int,
+    help="Maximum cache size in bytes. When exceeded, oldest items are removed.",
+)
+@click.option(
+    "--cache-limit-percent",
+    default=20.0,
+    type=float,
+    help="Minimum percent of total disk that should remain free.",
+)
 @click.option(
     "-a",
     "--artifact-filename",
@@ -29,6 +57,11 @@ from mender_docker_lifecycle_helper.helper import LifecycleHelper
     type=click.Path(file_okay=False, dir_okay=True),
 )
 @click.option(
+    "--cache-limit/--no-cache-limit",
+    default=True,
+    help="Enable automatic cache cleanup when size limits are exceeded.",
+)
+@click.option(
     "--delta/--no-delta",
     default=True,
     flag_value=True,
@@ -37,8 +70,7 @@ from mender_docker_lifecycle_helper.helper import LifecycleHelper
 @click.option(
     "-t",
     "--device-type",
-    help="Device type for the artifact.",
-    required=True,
+    help="Device type for the artifact. [required]",
     type=str,
 )
 @click.option(
@@ -72,8 +104,7 @@ from mender_docker_lifecycle_helper.helper import LifecycleHelper
 @click.option(
     "-p",
     "--platform",
-    help="Platform with which the artifact is compatible (e.g., linux/arm/v7)",
-    required=True,
+    help="Platform with which the artifact is compatible (e.g., linux/arm/v7) [required]",
     type=str,
 )
 @click.option(
@@ -133,17 +164,23 @@ from mender_docker_lifecycle_helper.helper import LifecycleHelper
         allow_dash=True,
         path_type=Path,
     ),
+    required=False,
 )
-@click.version_option()
 def cli(**args) -> None:
     """
     Produce and deploy a Mender artifact for the MANIFEST_FILE (compose yaml) Docker application, as deltas against local cache when available or repo version context otherwise.
-
-    :param args: An object of CLI args for the execution as prepared by Click decorators.
-    :return: None
     """
+
     args = SimpleNamespace(**args)
 
+    # Cache limit size takes precedence over percent
+    args.cache_limit_percent = (
+        None if args.cache_limit_size is not None else args.cache_limit_percent
+    )
+
+    args.cache_operation_only = (
+        args.clear_cache or args.clear_image_cache or args.clean_cache
+    )
     args.log_level = LOG_LEVELS[max(0, LOG_LEVELS.index(args.log_level) - args.verbose)]
 
     service_files = {}
@@ -156,7 +193,19 @@ def cli(**args) -> None:
         service_images[service] = image
     args.service_images = service_images
 
-    LifecycleHelper(args).prep_artifact()
+    helper = LifecycleHelper(args)
+
+    if args.cache_operation_only:
+        return
+
+    if not args.manifest_file:
+        raise click.ClickException("manifest_file is required")
+    if not args.platform:
+        raise click.ClickException("--platform is required")
+    if not args.device_type:
+        raise click.ClickException("--device-type is required")
+
+    helper.prep_artifact()
 
 
 if __name__ == "__main__":
