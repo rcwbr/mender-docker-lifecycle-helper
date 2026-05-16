@@ -4,10 +4,18 @@ from pathlib import Path
 
 from types import SimpleNamespace
 
-from mender_docker_lifecycle_helper.utils.mender_server import call_mender_host_api
+from mender_docker_lifecycle_helper.utils.mender_server import (
+    call_mender_host_api,
+    upload_artifact,
+    wait_for_deployment,
+)
 from mender_docker_lifecycle_helper.artifact_metadata import ArtifactMetadata
 from mender_docker_lifecycle_helper.context import LifecycleHelperContext
 from mender_docker_lifecycle_helper.artifact import LifecycleHelperArtifact
+
+
+class ArtifactDeployFailure(Exception):
+    pass
 
 
 class LifecycleHelper:
@@ -46,40 +54,19 @@ class LifecycleHelper:
         self.context.logger.info("Artifact file generated successfully.")
         return artifact
 
-    def upload_artifact(self, artifact: LifecycleHelperArtifact) -> None:
-        """
-        Upload the specified artifact file to the Mender server.
-
-        :param artifact: The object of the artifact to upload to the Mender server.
-        :return: None
-        """
-        with open(artifact.filename, "rb") as file_contents:
-            call_mender_host_api(
-                self.context,
-                "deployments/artifacts",
-                {
-                    "data": {
-                        "size": artifact.filename.stat().st_size,
-                        "description": "string",
-                    },
-                    "files": {"artifact": file_contents},
-                },
-            )
-            self.context.logger.info(f"Uploaded artifact {artifact.filename}")
-
-    def deploy_artifact(self, artifact: LifecycleHelperArtifact) -> None:
+    def deploy_artifact(self, artifact: LifecycleHelperArtifact) -> str:
         """
         Issue a deployment of a pre-uploaded artifact.
 
         :param artifact: The object of the artifact to deploy to the Mender server.
-        :return: None
+        :return: The deployment ID.
         """
         deployment_name = f"{artifact.name}-{self.context.device_group}"
 
         self.context.logger.debug(
             f"Creating deployment for artifact {artifact.name} to device group {self.context.device_group}"
         )
-        call_mender_host_api(
+        response = call_mender_host_api(
             self.context,
             f"deployments/deployments/group/{self.context.device_group}",
             {
@@ -89,7 +76,40 @@ class LifecycleHelper:
                 }
             },
         )
-        self.context.logger.info(f"Created deployment {deployment_name}")
+        deployment_id = None
+        if "Location" in response.headers:
+            location = response.headers["Location"]
+            # Location header format: /deployments/v1/deployments/{deploymentId}
+            deployment_id = location.rstrip("/").split("/")[-1]
+            self.context.logger.debug(
+                f"Got deployment ID from Location header: {deployment_id}"
+            )
+        else:
+            self.context.logger.error(
+                f"Could not extract deployment ID from response. "
+                f"Body: {response.text!r}, Headers: {dict(response.headers)}"
+            )
+            raise ValueError(
+                "Could not determine deployment ID from Mender API response"
+            )
+        self.context.logger.info(
+            f"Created deployment {deployment_name} (ID: {deployment_id})"
+        )
+        return deployment_id
+
+    def update_cache_artifact_metadata(
+        self, artifact_metadata: ArtifactMetadata
+    ) -> None:
+        """
+        Write the specified artifact metadata to the cache previous metadata location, if applicable.
+
+        :param artifact_metadata: The artifact metadata object to write to the cache.
+        """
+        if self.context.cache:
+            self.context.logger.debug(
+                f"Updating cached metadata at {self.context.cache_artifact_metadata_file}"
+            )
+            artifact_metadata.to_file(self.context.cache_artifact_metadata_file)
 
     def prep_artifact(self) -> None:
         """
@@ -114,14 +134,28 @@ class LifecycleHelper:
             services=LifecycleHelperArtifact.gen_artifact_services(self.context),
         )
         artifact = self.create_artifact(artifact_metadata)
-        self.upload_artifact(artifact)
+        upload_artifact(self.context, artifact)
 
         if self.context.device_group is not None:
-            self.deploy_artifact(artifact)
-            self.context.logger.debug(
-                f"Artifact {artifact.name} deployed; updating cached metadata at {self.context.cache_artifact_metadata_file}"
-            )
-            artifact_metadata.to_file(self.context.cache_artifact_metadata_file)
+            deployment_id = self.deploy_artifact(artifact)
+
+            if self.context.wait_for_deploy:
+                self.context.logger.info(
+                    f"Waiting for deployment {deployment_id} to complete..."
+                )
+                if wait_for_deployment(self.context, deployment_id):
+                    self.context.logger.debug(
+                        f"Deployment {deployment_id} for {artifact.name} succeeded."
+                    )
+                    self.update_cache_artifact_metadata(artifact_metadata)
+                else:
+                    raise ArtifactDeployFailure(
+                        f"Deployment {deployment_id} did not succeed; "
+                        "cached metadata will not be updated."
+                    )
+            else:
+                self.context.logger.debug(f"Artifact {artifact.name} deployed.")
+                self.update_cache_artifact_metadata(artifact_metadata)
         else:
             self.context.logger.debug(
                 "No device group set; skipping deployment creation."

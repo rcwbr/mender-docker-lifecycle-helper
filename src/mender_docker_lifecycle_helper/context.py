@@ -1,6 +1,7 @@
 import logging
 import os
 import shutil
+import subprocess
 import tempfile
 
 from pathlib import Path
@@ -12,7 +13,10 @@ import yaml
 
 from mender_docker_lifecycle_helper.artifact_metadata import ArtifactMetadata
 from mender_docker_lifecycle_helper.utils.image_cache import ImageCache
-from mender_docker_lifecycle_helper.utils.container_utils import get_image_hash
+from mender_docker_lifecycle_helper.utils.container_utils import (
+    DOCKER_BIN,
+    get_image_hash,
+)
 
 
 LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR"]
@@ -40,12 +44,11 @@ class LifecycleHelperContext:
         self.release = args.release
         self.service_files = args.service_files
         self.service_images = args.service_images
+        self.wait_for_deploy = args.wait_for_deploy
 
         self.logger = self._prep_logger(args.log_level)
 
         self.manifest_file = args.manifest_file.resolve()
-        with open(self.manifest_file, "r") as f:
-            self.manifest = yaml.safe_load(f.read())
 
         self.repo_root_dir = self._repo_root_dir(self.manifest_file)
         self.repo_version = self._repo_version(self.repo_root_dir)
@@ -60,8 +63,6 @@ class LifecycleHelperContext:
 
         if self.cache:
             self.cache_dir = self._prep_cache_dir(args.cache_dir)
-            self.temp_dir = self.cache_dir / "temp"
-            self.temp_dir.mkdir()
             manifests_cache_dir = self.cache_dir / "manifests"
             manifests_cache_dir.mkdir(exist_ok=True)
             manifest_cache_dir = manifests_cache_dir / self.manifest_name
@@ -69,7 +70,15 @@ class LifecycleHelperContext:
             self.cache_artifact_metadata_file = (
                 manifest_cache_dir / "previous_artifact.json"
             )
-            self.image_cache = ImageCache(self.cache_dir / "images")
+        else:
+            self.cache_dir = Path(
+                self.repo_root_dir / ".mender-docker-lifecycle-helper"
+            )
+        self.image_cache = ImageCache(self.cache_dir / "images")
+        self.temp_dir = self.cache_dir / "temp"
+        self.temp_dir.mkdir(parents=True)
+
+        self.manifest = self._compose_content_from_file(self.manifest_file)
 
         if self.delta:
             self.previous_artifact_metadata = self._prep_previous_artifact_metadata(
@@ -77,16 +86,9 @@ class LifecycleHelperContext:
             )
 
     def __del__(self):
-        if self.cache:
-            shutil.rmtree(self.temp_dir)
-        # services_changed = False
-        # for service_name, service in manifest.services.items():
-        #     if (
-        #         service_name not in previous_artifact_metadata.services
-        #         or previous_artifact_metadata.services[service_name]["image"]["ref"] != service["image"]
-        #     ):
-        #         services_changed = True
-        # TODO support manifest-only artifact if services not changed
+        shutil.rmtree(self.temp_dir)
+        if not self.cache:
+            shutil.rmtree(self.cache_dir)
 
     @staticmethod
     def _default_cache_dir(
@@ -200,6 +202,29 @@ class LifecycleHelperContext:
 
         return temp_repo_dir
 
+    def _compose_content_from_file(self, compose_file: Path) -> dict:
+        """
+        Read the contents of a Compose YAML file using all expansions per the spec.
+
+        :param compose_file: The path to the Compose YAML file to read.
+        :return: The normalized compose content as a dict with all directives resolved.
+        :raises subprocess.CalledProcessError: If docker compose config fails.
+        :raises yaml.YAMLError: If the output cannot be parsed as YAML.
+        """
+        result = subprocess.run(
+            [
+                DOCKER_BIN,
+                "compose",
+                "--file",
+                str(compose_file),
+                "config",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return yaml.safe_load(result.stdout)
+
     def _artifact_services_metadata_from_compose(
         self, compose_file: Path
     ) -> dict[str, dict[str, dict[str, str]]]:
@@ -217,8 +242,7 @@ class LifecycleHelperContext:
                 }
             }
         """
-        with open(compose_file, "r") as f:
-            compose = yaml.safe_load(f.read())
+        compose = self._compose_content_from_file(compose_file)
 
         return {
             service: {

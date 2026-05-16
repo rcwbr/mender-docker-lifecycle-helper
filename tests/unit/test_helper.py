@@ -1,14 +1,17 @@
 """Unit tests for the LifecycleHelper class."""
 
 import uuid
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, patch
 
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from mender_docker_lifecycle_helper.helper import LifecycleHelper
+from mender_docker_lifecycle_helper.helper import (
+    ArtifactDeployFailure,
+    LifecycleHelper,
+)
 from mender_docker_lifecycle_helper.artifact_metadata import ArtifactMetadata
 
 
@@ -31,6 +34,7 @@ def mock_context():
             "/tmp/test/cache/manifests/test-manifest/previous_artifact.json"
         ),
         cache=False,
+        wait_for_deploy=False,
     )
 
 
@@ -166,61 +170,6 @@ class TestCreateArtifact:
             )
 
 
-class TestUploadArtifact:
-    """Tests for the upload_artifact method."""
-
-    def test_upload_artifact_calls_api(self, mock_context):
-        """Test upload_artifact calls the Mender API with correct parameters."""
-        mock_context.mender_host = "https://hosted.mender.io"
-        mock_context.logger = MagicMock()
-
-        artifact = MagicMock()
-        artifact.filename = Path("/tmp/test-artifact.mender")
-        artifact.name = "test-manifest-1.0.0"
-
-        helper = LifecycleHelper.__new__(LifecycleHelper)
-        helper.context = mock_context
-
-        with patch(
-            "mender_docker_lifecycle_helper.helper.call_mender_host_api"
-        ) as mock_call_api:
-            with patch("builtins.open", mock_open(read_data=b"fake artifact data")):
-                with patch("pathlib.Path.stat") as mock_stat:
-                    mock_stat.return_value.st_size = 100
-
-                    helper.upload_artifact(artifact)
-
-                    assert mock_call_api.call_count == 1
-                    call_args = mock_call_api.call_args
-                    assert call_args[0][0] == mock_context
-                    assert call_args[0][1] == "deployments/artifacts"
-                    assert call_args[0][2]["data"]["size"] == 100
-                    assert call_args[0][2]["data"]["description"] == "string"
-                    assert "artifact" in call_args[0][2]["files"]
-
-    def test_upload_artifact_logs_info(self, mock_context):
-        """Test upload_artifact logs appropriate info message."""
-        mock_context.logger = MagicMock()
-
-        artifact = MagicMock()
-        artifact.filename = Path("/tmp/test-artifact.mender")
-        artifact.name = "test-manifest-1.0.0"
-
-        helper = LifecycleHelper.__new__(LifecycleHelper)
-        helper.context = mock_context
-
-        with patch("mender_docker_lifecycle_helper.helper.call_mender_host_api"):
-            with patch("builtins.open", mock_open(read_data=b"fake artifact data")):
-                with patch("pathlib.Path.stat") as mock_stat:
-                    mock_stat.return_value.st_size = 100
-
-                    helper.upload_artifact(artifact)
-
-                    mock_context.logger.info.assert_called_once_with(
-                        f"Uploaded artifact {artifact.filename}"
-                    )
-
-
 class TestDeployArtifact:
     """Tests for the deploy_artifact method."""
 
@@ -238,6 +187,12 @@ class TestDeployArtifact:
         with patch(
             "mender_docker_lifecycle_helper.helper.call_mender_host_api"
         ) as mock_call_api:
+            mock_response = MagicMock()
+            mock_response.headers = {
+                "Location": "/deployments/v1/deployments/deploy-12345"
+            }
+            mock_call_api.return_value = mock_response
+
             helper.deploy_artifact(artifact)
 
             assert mock_call_api.call_count == 1
@@ -258,14 +213,25 @@ class TestDeployArtifact:
         helper = LifecycleHelper.__new__(LifecycleHelper)
         helper.context = mock_context
 
-        with patch("mender_docker_lifecycle_helper.helper.call_mender_host_api"):
+        with patch(
+            "mender_docker_lifecycle_helper.helper.call_mender_host_api"
+        ) as mock_call_api:
+            mock_response = MagicMock()
+            mock_response.headers = {
+                "Location": "/deployments/v1/deployments/deploy-12345"
+            }
+            mock_call_api.return_value = mock_response
+
             helper.deploy_artifact(artifact)
 
-            mock_context.logger.debug.assert_called_once_with(
+            mock_context.logger.debug.assert_any_call(
                 f"Creating deployment for artifact {artifact.name} to device group {mock_context.device_group}"
             )
-            mock_context.logger.info.assert_called_once_with(
-                f"Created deployment test-manifest-1.0.0-test-group"
+            mock_context.logger.debug.assert_any_call(
+                "Got deployment ID from Location header: deploy-12345"
+            )
+            mock_context.logger.info.assert_any_call(
+                f"Created deployment test-manifest-1.0.0-test-group (ID: deploy-12345)"
             )
 
     def test_deploy_artifact_generates_correct_deployment_name(self, mock_context):
@@ -282,11 +248,69 @@ class TestDeployArtifact:
         with patch(
             "mender_docker_lifecycle_helper.helper.call_mender_host_api"
         ) as mock_call_api:
-            helper.deploy_artifact(artifact)
+            mock_response = MagicMock()
+            mock_response.headers = {
+                "Location": "/deployments/v1/deployments/deploy-12345"
+            }
+            mock_call_api.return_value = mock_response
+
+            deployment_id = helper.deploy_artifact(artifact)
 
             call_args = mock_call_api.call_args
             json_data = call_args[0][2]["json"]
             assert json_data["name"] == "my-app-2.0.0-production-devices"
+            assert deployment_id == "deploy-12345"
+
+    def test_deploy_artifact_returns_deployment_id(self, mock_context):
+        """Test deploy_artifact returns the deployment ID from the API response."""
+        mock_context.device_group = "test-group"
+        mock_context.logger = MagicMock()
+
+        artifact = MagicMock()
+        artifact.name = "test-manifest-1.0.0"
+
+        helper = LifecycleHelper.__new__(LifecycleHelper)
+        helper.context = mock_context
+
+        with patch(
+            "mender_docker_lifecycle_helper.helper.call_mender_host_api"
+        ) as mock_call_api:
+            mock_response = MagicMock()
+            mock_response.headers = {
+                "Location": "/deployments/v1/deployments/deployment-id-12345"
+            }
+            mock_call_api.return_value = mock_response
+
+            result = helper.deploy_artifact(artifact)
+
+            assert result == "deployment-id-12345"
+            mock_context.logger.info.assert_any_call(
+                f"Created deployment test-manifest-1.0.0-test-group (ID: deployment-id-12345)"
+            )
+
+    def test_deploy_artifact_missing_location_header_raises_error(self, mock_context):
+        """Test deploy_artifact raises ValueError when Location header is missing."""
+        mock_context.device_group = "test-group"
+        mock_context.logger = MagicMock()
+
+        artifact = MagicMock()
+        artifact.name = "test-manifest-1.0.0"
+
+        helper = LifecycleHelper.__new__(LifecycleHelper)
+        helper.context = mock_context
+
+        with patch(
+            "mender_docker_lifecycle_helper.helper.call_mender_host_api"
+        ) as mock_call_api:
+            mock_response = MagicMock()
+            mock_response.headers = {}  # No Location header
+            mock_response.text = "some error response"
+            mock_call_api.return_value = mock_response
+
+            with pytest.raises(ValueError, match="Could not determine deployment ID"):
+                helper.deploy_artifact(artifact)
+
+            mock_context.logger.error.assert_called_once()
 
 
 class TestPrepArtifact:
@@ -311,7 +335,9 @@ class TestPrepArtifact:
 
             with patch.object(helper, "create_artifact") as mock_create:
                 mock_create.return_value = mock_artifact
-                with patch.object(helper, "upload_artifact") as mock_upload:
+                with patch(
+                    "mender_docker_lifecycle_helper.helper.upload_artifact"
+                ) as mock_upload:
                     with patch(
                         "mender_docker_lifecycle_helper.helper.ArtifactMetadata"
                     ) as mock_metadata_class:
@@ -359,7 +385,9 @@ class TestPrepArtifact:
 
             with patch.object(helper, "create_artifact") as mock_create:
                 mock_create.return_value = mock_artifact
-                with patch.object(helper, "upload_artifact") as mock_upload:
+                with patch(
+                    "mender_docker_lifecycle_helper.helper.upload_artifact"
+                ) as mock_upload:
                     with patch(
                         "mender_docker_lifecycle_helper.helper.ArtifactMetadata"
                     ) as mock_metadata_class:
@@ -410,7 +438,9 @@ class TestPrepArtifact:
 
             with patch.object(helper, "create_artifact") as mock_create:
                 mock_create.return_value = mock_artifact
-                with patch.object(helper, "upload_artifact") as mock_upload:
+                with patch(
+                    "mender_docker_lifecycle_helper.helper.upload_artifact"
+                ) as mock_upload:
                     with patch.object(helper, "deploy_artifact") as mock_deploy:
                         with patch(
                             "mender_docker_lifecycle_helper.helper.ArtifactMetadata"
@@ -461,7 +491,9 @@ class TestPrepArtifact:
 
             with patch.object(helper, "create_artifact") as mock_create:
                 mock_create.return_value = mock_artifact
-                with patch.object(helper, "upload_artifact") as mock_upload:
+                with patch(
+                    "mender_docker_lifecycle_helper.helper.upload_artifact"
+                ) as mock_upload:
                     with patch.object(helper, "deploy_artifact") as mock_deploy:
                         with patch(
                             "mender_docker_lifecycle_helper.helper.ArtifactMetadata"
@@ -486,3 +518,193 @@ class TestPrepArtifact:
                                 mock_context.logger.debug.assert_any_call(
                                     "No device group set; skipping deployment creation."
                                 )
+
+
+class TestPrepArtifactWithWaitForDeploy:
+    """Tests for prep_artifact with wait_for_deploy flag."""
+
+    def test_wait_for_deploy_success_writes_cache(self, mock_context):
+        """Test prep_artifact with wait_for_deploy writes cache on success."""
+        mock_context.release = True
+        mock_context.repo_version = "1.0.0"
+        mock_context.device_group = "test-group"
+        mock_context.logger = MagicMock()
+        mock_context.cache = True
+        mock_context.wait_for_deploy = True
+
+        helper = LifecycleHelper.__new__(LifecycleHelper)
+        helper.context = mock_context
+
+        with patch(
+            "mender_docker_lifecycle_helper.helper.LifecycleHelperArtifact"
+        ) as mock_artifact_class:
+            mock_artifact = MagicMock()
+            mock_artifact.name = "test-manifest-1.0.0"
+            mock_artifact_class.return_value = mock_artifact
+
+            with patch.object(helper, "create_artifact") as mock_create:
+                mock_create.return_value = mock_artifact
+                with patch(
+                    "mender_docker_lifecycle_helper.helper.upload_artifact"
+                ) as mock_upload:
+                    with patch.object(helper, "deploy_artifact") as mock_deploy:
+                        mock_deploy.return_value = "deploy-12345"
+                        with patch(
+                            "mender_docker_lifecycle_helper.helper.wait_for_deployment"
+                        ) as mock_wait:
+                            mock_wait.return_value = True
+                            with patch(
+                                "mender_docker_lifecycle_helper.helper.ArtifactMetadata"
+                            ) as mock_metadata_class:
+                                mock_metadata = MagicMock()
+                                mock_metadata_class.return_value = mock_metadata
+                                mock_metadata.to_dict.return_value = {
+                                    "version": "1.0.0",
+                                    "services": {},
+                                }
+
+                                with patch.object(
+                                    mock_artifact_class,
+                                    "gen_artifact_services",
+                                    return_value={
+                                        "server": {
+                                            "image": {"ref": "test", "hash": "123"}
+                                        }
+                                    },
+                                ):
+                                    with patch.object(
+                                        mock_metadata, "to_file"
+                                    ) as mock_to_file:
+                                        helper.prep_artifact()
+
+                                        mock_deploy.assert_called_once_with(
+                                            mock_artifact
+                                        )
+                                        mock_wait.assert_called_once_with(
+                                            mock_context, "deploy-12345"
+                                        )
+                                        mock_to_file.assert_called_once_with(
+                                            mock_context.cache_artifact_metadata_file
+                                        )
+                                        mock_context.logger.info.assert_any_call(
+                                            "Waiting for deployment deploy-12345 to complete..."
+                                        )
+
+    def test_wait_for_deploy_failure_does_not_write_cache(self, mock_context):
+        """Test prep_artifact with wait_for_deploy does not write cache on failure."""
+        mock_context.release = True
+        mock_context.repo_version = "1.0.0"
+        mock_context.device_group = "test-group"
+        mock_context.logger = MagicMock()
+        mock_context.cache = True
+        mock_context.wait_for_deploy = True
+
+        helper = LifecycleHelper.__new__(LifecycleHelper)
+        helper.context = mock_context
+
+        with patch(
+            "mender_docker_lifecycle_helper.helper.LifecycleHelperArtifact"
+        ) as mock_artifact_class:
+            mock_artifact = MagicMock()
+            mock_artifact.name = "test-manifest-1.0.0"
+            mock_artifact_class.return_value = mock_artifact
+
+            with patch.object(helper, "create_artifact") as mock_create:
+                mock_create.return_value = mock_artifact
+                with patch(
+                    "mender_docker_lifecycle_helper.helper.upload_artifact"
+                ) as mock_upload:
+                    with patch.object(helper, "deploy_artifact") as mock_deploy:
+                        mock_deploy.return_value = "deploy-12345"
+                        with patch(
+                            "mender_docker_lifecycle_helper.helper.wait_for_deployment"
+                        ) as mock_wait:
+                            mock_wait.return_value = False
+                            with patch(
+                                "mender_docker_lifecycle_helper.helper.ArtifactMetadata"
+                            ) as mock_metadata_class:
+                                mock_metadata = MagicMock()
+                                mock_metadata_class.return_value = mock_metadata
+                                mock_metadata.to_dict.return_value = {
+                                    "version": "1.0.0",
+                                    "services": {},
+                                }
+
+                                with patch.object(
+                                    mock_artifact_class,
+                                    "gen_artifact_services",
+                                    return_value={
+                                        "server": {
+                                            "image": {"ref": "test", "hash": "123"}
+                                        }
+                                    },
+                                ):
+                                    with patch.object(
+                                        mock_metadata, "to_file"
+                                    ) as mock_to_file:
+                                        with pytest.raises(
+                                            ArtifactDeployFailure,
+                                            match="Deployment deploy-12345 did not succeed",
+                                        ):
+                                            helper.prep_artifact()
+
+                                        mock_deploy.assert_called_once_with(
+                                            mock_artifact
+                                        )
+                                        mock_wait.assert_called_once_with(
+                                            mock_context, "deploy-12345"
+                                        )
+                                        mock_to_file.assert_not_called()
+
+    def test_without_wait_for_deploy_writes_cache_immediately(self, mock_context):
+        """Test prep_artifact without wait_for_deploy writes cache immediately."""
+        mock_context.release = True
+        mock_context.repo_version = "1.0.0"
+        mock_context.device_group = "test-group"
+        mock_context.logger = MagicMock()
+        mock_context.cache = True
+        mock_context.wait_for_deploy = False
+
+        helper = LifecycleHelper.__new__(LifecycleHelper)
+        helper.context = mock_context
+
+        with patch(
+            "mender_docker_lifecycle_helper.helper.LifecycleHelperArtifact"
+        ) as mock_artifact_class:
+            mock_artifact = MagicMock()
+            mock_artifact.name = "test-manifest-1.0.0"
+            mock_artifact_class.return_value = mock_artifact
+
+            with patch.object(helper, "create_artifact") as mock_create:
+                mock_create.return_value = mock_artifact
+                with patch(
+                    "mender_docker_lifecycle_helper.helper.upload_artifact"
+                ) as mock_upload:
+                    with patch.object(helper, "deploy_artifact") as mock_deploy:
+                        mock_deploy.return_value = "deploy-12345"
+                        with patch(
+                            "mender_docker_lifecycle_helper.helper.ArtifactMetadata"
+                        ) as mock_metadata_class:
+                            mock_metadata = MagicMock()
+                            mock_metadata_class.return_value = mock_metadata
+                            mock_metadata.to_dict.return_value = {
+                                "version": "1.0.0",
+                                "services": {},
+                            }
+
+                            with patch.object(
+                                mock_artifact_class,
+                                "gen_artifact_services",
+                                return_value={
+                                    "server": {"image": {"ref": "test", "hash": "123"}}
+                                },
+                            ):
+                                with patch.object(
+                                    mock_metadata, "to_file"
+                                ) as mock_to_file:
+                                    helper.prep_artifact()
+
+                                    mock_deploy.assert_called_once_with(mock_artifact)
+                                    mock_to_file.assert_called_once_with(
+                                        mock_context.cache_artifact_metadata_file
+                                    )
