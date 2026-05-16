@@ -1,6 +1,7 @@
 import logging
 import os
 import shutil
+import subprocess
 import tempfile
 
 from pathlib import Path
@@ -12,7 +13,10 @@ import yaml
 
 from mender_docker_lifecycle_helper.artifact_metadata import ArtifactMetadata
 from mender_docker_lifecycle_helper.utils.image_cache import ImageCache
-from mender_docker_lifecycle_helper.utils.container_utils import get_image_hash
+from mender_docker_lifecycle_helper.utils.container_utils import (
+    DOCKER_BIN,
+    get_image_hash,
+)
 
 
 LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR"]
@@ -45,8 +49,6 @@ class LifecycleHelperContext:
         self.logger = self._prep_logger(args.log_level)
 
         self.manifest_file = args.manifest_file.resolve()
-        with open(self.manifest_file, "r") as f:
-            self.manifest = yaml.safe_load(f.read())
 
         self.repo_root_dir = self._repo_root_dir(self.manifest_file)
         self.repo_version = self._repo_version(self.repo_root_dir)
@@ -75,6 +77,8 @@ class LifecycleHelperContext:
         self.image_cache = ImageCache(self.cache_dir / "images")
         self.temp_dir = self.cache_dir / "temp"
         self.temp_dir.mkdir(parents=True)
+
+        self.manifest = self._compose_content_from_file(self.manifest_file)
 
         if self.delta:
             self.previous_artifact_metadata = self._prep_previous_artifact_metadata(
@@ -198,6 +202,29 @@ class LifecycleHelperContext:
 
         return temp_repo_dir
 
+    def _compose_content_from_file(self, compose_file: Path) -> dict:
+        """
+        Read the contents of a Compose YAML file using all expansions per the spec.
+
+        :param compose_file: The path to the Compose YAML file to read.
+        :return: The normalized compose content as a dict with all directives resolved.
+        :raises subprocess.CalledProcessError: If docker compose config fails.
+        :raises yaml.YAMLError: If the output cannot be parsed as YAML.
+        """
+        result = subprocess.run(
+            [
+                DOCKER_BIN,
+                "compose",
+                "--file",
+                str(compose_file),
+                "config",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return yaml.safe_load(result.stdout)
+
     def _artifact_services_metadata_from_compose(
         self, compose_file: Path
     ) -> dict[str, dict[str, dict[str, str]]]:
@@ -215,8 +242,7 @@ class LifecycleHelperContext:
                 }
             }
         """
-        with open(compose_file, "r") as f:
-            compose = yaml.safe_load(f.read())
+        compose = self._compose_content_from_file(compose_file)
 
         return {
             service: {

@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import pytest
+import subprocess
 import yaml
 
 from pathlib import Path
@@ -59,6 +60,7 @@ class TestLifecycleHelperContextInitMock:
             _prep_logger=lambda log_level: log_level,
             _repo_root_dir=lambda file: tmp_path,
             _repo_version=lambda folder: folder,
+            _compose_content_from_file=lambda file: None,
             manifest_file=None,
         )
         LifecycleHelperContext.__init__(
@@ -109,6 +111,7 @@ class TestLifecycleHelperContextInitMock:
             _prep_logger=lambda log_level: log_level,
             _repo_root_dir=lambda file: tmp_path,
             _repo_version=lambda folder: folder,
+            _compose_content_from_file=lambda file: None,
             manifest_file=None,
         )
         LifecycleHelperContext.__init__(
@@ -158,6 +161,7 @@ class TestLifecycleHelperContextInitMock:
             ),
             _repo_root_dir=lambda file: tmp_path,
             _repo_version=lambda folder: folder,
+            _compose_content_from_file=lambda file: None,
             manifest_file=None,
         )
         LifecycleHelperContext.__init__(
@@ -227,6 +231,7 @@ class TestLifecycleHelperContextInitMock:
             ),
             _repo_root_dir=lambda file: tmp_path,
             _repo_version=lambda folder: folder,
+            _compose_content_from_file=lambda file: None,
             manifest_file=None,
         )
         LifecycleHelperContext.__init__(
@@ -289,6 +294,7 @@ class TestLifecycleHelperContextInitMock:
             _prep_previous_artifact_metadata=lambda version: version,
             _repo_root_dir=lambda file: tmp_path,
             _repo_version=lambda folder: folder,
+            _compose_content_from_file=lambda file: None,
             manifest_file=None,
         )
         LifecycleHelperContext.__init__(
@@ -390,7 +396,21 @@ class TestLifecycleHelperContextInitIntegration:
         assert context.image_cache.save_cache_dir == cache_dir / "images" / "save"
         assert context.logger.level == getattr(logging, "DEBUG")
         assert context.manifest_file == manifest_file
-        assert context.manifest == manifest_contents
+        assert context.manifest == {
+            "name": "my-app",
+            "networks": {
+                "default": {
+                    "name": "my-app_default",
+                }
+            },
+            "services": {
+                "server": {
+                    "image": "my-server",
+                    "networks": {"default": None},
+                    "ports": [{"mode": "ingress", "protocol": "tcp", "target": 8080}],
+                }
+            },
+        }
         assert context.manifest_name == "test-repo-my-app"
         assert context.mender_host == "https://hosted.mender.io"
         assert context.mender_pat == "test-pat-token"
@@ -480,7 +500,21 @@ class TestLifecycleHelperContextInitIntegration:
         assert context.device_group == "test-group"
         assert context.logger.level == getattr(logging, "DEBUG")
         assert context.manifest_file == manifest_file
-        assert context.manifest == manifest_contents_new
+        assert context.manifest == {
+            "name": "my-app",
+            "networks": {
+                "default": {
+                    "name": "my-app_default",
+                }
+            },
+            "services": {
+                "server": {
+                    "image": "my-server-new",
+                    "networks": {"default": None},
+                    "ports": [{"mode": "ingress", "protocol": "tcp", "target": 8081}],
+                }
+            },
+        }
         assert context.manifest_name == "test-repo-my-app"
         assert context.mender_host == "https://hosted.mender.io"
         assert context.mender_pat == "test-pat-token"
@@ -574,7 +608,21 @@ class TestLifecycleHelperContextInitIntegration:
         assert context.device_group == "test-group"
         assert context.logger.level == getattr(logging, "DEBUG")
         assert context.manifest_file == manifest_file
-        assert context.manifest == manifest_contents_new
+        assert context.manifest == {
+            "name": "my-app",
+            "networks": {
+                "default": {
+                    "name": "my-app_default",
+                }
+            },
+            "services": {
+                "server": {
+                    "image": "my-server-new",
+                    "networks": {"default": None},
+                    "ports": [{"mode": "ingress", "protocol": "tcp", "target": 8081}],
+                }
+            },
+        }
         assert context.manifest_name == "test-repo-my-app"
         assert context.mender_host == "https://hosted.mender.io"
         assert context.mender_pat == "test-pat-token"
@@ -858,7 +906,11 @@ class TestArtifactServicesMetadataFromCompose:
         compose_file.write_text(yaml.dump(compose_content))
 
         result = LifecycleHelperContext._artifact_services_metadata_from_compose(
-            SimpleNamespace(logger=logging.Logger("test_logger")), compose_file
+            SimpleNamespace(
+                logger=logging.Logger("test_logger"),
+                _compose_content_from_file=lambda file: compose_content,
+            ),
+            compose_file,
         )
 
         assert result["serviceA"] == {
@@ -1065,3 +1117,273 @@ class TestMatchOrFindHash:
 
         # Expect ref as result, per the above get_image_hash mock
         assert result == "my-image:1234"
+
+
+class TestComposeContentFromFile:
+    """Tests for the _compose_content_from_file method.
+
+    The function calls `docker compose --file <compose_file> config` to resolve
+    compose-spec directives and return normalized YAML output.
+
+    Per compose-spec:
+    - include: Merges multiple compose files into one
+    - extends: Resolves service inheritance (parent config merged into child)
+    - env_file: Loads environment variables from file into environment section
+
+    See: https://github.com/compose-spec/compose-spec/blob/main/spec.md
+    """
+
+    def _create_context(self, tmp_path):
+        """Helper to create a context with required attributes for testing."""
+        context = LifecycleHelperContext.__new__(LifecycleHelperContext)
+        context.logger = logging.Logger("test_logger")
+        context.temp_dir = tmp_path
+        return context
+
+    def test_compose_content_simple(self, tmp_path):
+        """Test _compose_content_from_file with a simple compose file."""
+        compose_file = tmp_path / "docker-compose.yaml"
+        compose_file.write_text(
+            yaml.dump({"services": {"web": {"image": "nginx:latest"}}})
+        )
+
+        context = self._create_context(tmp_path)
+
+        result = LifecycleHelperContext._compose_content_from_file(
+            context, compose_file
+        )
+        expected = {
+            "name": tmp_path.name,
+            "networks": {
+                "default": {
+                    "name": f"{tmp_path.name}_default",
+                }
+            },
+            "services": {
+                "web": {"image": "nginx:latest", "networks": {"default": None}}
+            },
+        }
+        assert result == expected
+
+    def test_compose_content_with_include_resolved(self, tmp_path):
+        """Test _compose_content_from_file with include directive resolved.
+
+        Per compose-spec, include merges multiple files.
+        See: https://github.com/compose-spec/compose-spec/blob/main/spec.md#include
+        """
+        compose_file = tmp_path / "docker-compose.yaml"
+        compose_file.write_text(
+            yaml.dump(
+                {
+                    "include": ["./shared.yaml"],
+                    "services": {"web": {"image": "nginx:latest"}},
+                }
+            )
+        )
+
+        # Create the included file
+        (tmp_path / "shared.yaml").write_text(
+            yaml.dump({"services": {"db": {"image": "postgres:15"}}})
+        )
+
+        context = self._create_context(tmp_path)
+
+        result = LifecycleHelperContext._compose_content_from_file(
+            context, compose_file
+        )
+        expected = {
+            "name": tmp_path.name,
+            "networks": {
+                "default": {
+                    "name": f"{tmp_path.name}_default",
+                }
+            },
+            "services": {
+                "db": {"image": "postgres:15", "networks": {"default": None}},
+                "web": {"image": "nginx:latest", "networks": {"default": None}},
+            },
+        }
+        assert result == expected
+
+    def test_compose_content_with_extends_resolved(self, tmp_path):
+        """Test _compose_content_from_file with extends directive resolved.
+
+        Per compose-spec, extends allows service inheritance.
+        See: https://github.com/compose-spec/compose-spec/blob/main/spec.md#extends
+        """
+        compose_file = tmp_path / "docker-compose.yaml"
+        compose_file.write_text(
+            yaml.dump(
+                {
+                    "services": {
+                        "base": {"image": "nginx:latest", "ports": ["8080:80"]},
+                        "web-dev": {
+                            "extends": {"service": "base"},
+                            "environment": {"DEBUG": "true"},
+                        },
+                    }
+                }
+            )
+        )
+
+        context = self._create_context(tmp_path)
+
+        result = LifecycleHelperContext._compose_content_from_file(
+            context, compose_file
+        )
+        expected = {
+            "name": tmp_path.name,
+            "networks": {
+                "default": {
+                    "name": f"{tmp_path.name}_default",
+                }
+            },
+            "services": {
+                "base": {
+                    "image": "nginx:latest",
+                    "networks": {"default": None},
+                    "ports": [
+                        {
+                            "mode": "ingress",
+                            "protocol": "tcp",
+                            "published": "8080",
+                            "target": 80,
+                        }
+                    ],
+                },
+                "web-dev": {
+                    "environment": {"DEBUG": "true"},
+                    "image": "nginx:latest",
+                    "networks": {"default": None},
+                    "ports": [
+                        {
+                            "mode": "ingress",
+                            "protocol": "tcp",
+                            "published": "8080",
+                            "target": 80,
+                        }
+                    ],
+                },
+            },
+        }
+        assert result == expected
+
+    def test_compose_content_with_env_file_resolved(self, tmp_path):
+        """Test _compose_content_from_file with env_file directive resolved.
+
+        Per compose-spec, env_file loads environment variables from a file.
+        See: https://github.com/compose-spec/compose-spec/blob/main/spec.md#env_file
+        """
+        compose_file = tmp_path / "docker-compose.yaml"
+        compose_file.write_text(
+            yaml.dump(
+                {"services": {"app": {"image": "myapp:latest", "env_file": ".env"}}}
+            )
+        )
+
+        # Create the env file
+        (tmp_path / ".env").write_text(
+            "DATABASE_URL=postgres://localhost/db\nDEBUG=false\nPORT=8080\n"
+        )
+
+        context = self._create_context(tmp_path)
+
+        result = LifecycleHelperContext._compose_content_from_file(
+            context, compose_file
+        )
+        expected = {
+            "name": tmp_path.name,
+            "networks": {
+                "default": {
+                    "name": f"{tmp_path.name}_default",
+                }
+            },
+            "services": {
+                "app": {
+                    "environment": {
+                        "DATABASE_URL": "postgres://localhost/db",
+                        "DEBUG": "false",
+                        "PORT": "8080",
+                    },
+                    "image": "myapp:latest",
+                    "networks": {"default": None},
+                }
+            },
+        }
+        assert result == expected
+
+    def test_compose_content_with_multiple_directives(self, tmp_path):
+        """Test _compose_content_from_file with multiple directives resolved together."""
+        compose_file = tmp_path / "docker-compose.yaml"
+        compose_file.write_text(
+            yaml.dump(
+                {
+                    "include": ["./base.yaml"],
+                    "services": {
+                        "frontend": {"build": {"context": "."}},
+                        "backend-base": {
+                            "image": "python:latest",
+                            "environment": {"DB": "postgres"},
+                        },
+                        "backend": {"extends": {"service": "backend-base"}},
+                    },
+                }
+            )
+        )
+
+        # Included file provides nginx service
+        (tmp_path / "base.yaml").write_text(
+            yaml.dump({"services": {"nginx": {"image": "nginx:latest"}}})
+        )
+
+        context = self._create_context(tmp_path)
+
+        result = LifecycleHelperContext._compose_content_from_file(
+            context, compose_file
+        )
+        expected = {
+            "name": tmp_path.name,
+            "networks": {
+                "default": {
+                    "name": f"{tmp_path.name}_default",
+                }
+            },
+            "services": {
+                "backend": {
+                    "environment": {"DB": "postgres"},
+                    "image": "python:latest",
+                    "networks": {"default": None},
+                },
+                "backend-base": {
+                    "environment": {"DB": "postgres"},
+                    "image": "python:latest",
+                    "networks": {"default": None},
+                },
+                "frontend": {
+                    "build": {"context": str(tmp_path), "dockerfile": "Dockerfile"},
+                    "networks": {"default": None},
+                },
+                "nginx": {"image": "nginx:latest", "networks": {"default": None}},
+            },
+        }
+        assert result == expected
+
+    def test_compose_content_propagates_docker_error(self, tmp_path, monkeypatch):
+        """Test _compose_content_from_file propagates docker compose config errors."""
+
+        compose_file = tmp_path / "docker-compose.yaml"
+        compose_file.write_text(yaml.dump({"services": {"web": {"image": "nginx"}}}))
+
+        context = self._create_context(tmp_path)
+
+        def mock_run(cmd, *args, **kwargs):
+            raise subprocess.CalledProcessError(
+                1, "docker compose config", stderr="not a valid compose file"
+            )
+
+        monkeypatch.setattr(
+            "mender_docker_lifecycle_helper.context.subprocess.run", mock_run
+        )
+
+        with pytest.raises(subprocess.CalledProcessError):
+            LifecycleHelperContext._compose_content_from_file(context, compose_file)
