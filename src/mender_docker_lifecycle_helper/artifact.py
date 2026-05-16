@@ -15,7 +15,7 @@ from mender_docker_lifecycle_helper.utils.image_cache import IMAGE_FILE_NAME
 DEEP_DELTA_FILENAME = "deep_delta"
 
 
-class ManifestContentMismatchException(Exception):
+class ManifestContentException(Exception):
     pass
 
 
@@ -140,9 +140,43 @@ class LifecycleHelperArtifact:
         self.context.logger.debug(
             f"Preparing artifact files for image {service_image['ref']} for service {service_name} in {artifact_image_prep_dir}"
         )
-        artifact_image_prep_dir.mkdir()
-        (artifact_image_prep_dir / "sums-new.txt").write_text(service_image["hash"])
-        (artifact_image_prep_dir / "url-new.txt").write_text(service_image["ref"])
+        # If another service has already prepared this image, just ensure the metadata also matches this service
+        if artifact_image_prep_dir.is_dir():
+            # If metadata does not match, error (the client will not unpack the same image to multiple refs)
+            prepared_sum_new = (artifact_image_prep_dir / "sums-new.txt").read_text()
+            prepared_url_new = (artifact_image_prep_dir / "url-new.txt").read_text()
+            if (
+                # The sum check is effectively redundant, since it always matches the dirname
+                prepared_sum_new != service_image["hash"]
+                or prepared_url_new != service_image["ref"]
+            ):
+                raise ManifestContentException(
+                    f"The image {prepared_sum_new} could not be prepared for {service_image['ref']} for service {service_name} as it is already assigned to {prepared_url_new} and the client will not unpack the same image hash for multiple refs."
+                )
+            if self.context.delta:
+                # If this is a delta image and the prepared image dir is not, error
+                if not (artifact_image_prep_dir / DEEP_DELTA_FILENAME).is_file():
+                    raise ManifestContentException(
+                        f"The image {prepared_sum_new} could not be prepared for service {service_name} as a delta as it is already assigned to {prepared_url_new} as non-delta."
+                    )
+
+                # If this is a delta image and the prepared previous hash is not the same as the previous hash for this, error
+                prepared_sum_current = (
+                    artifact_image_prep_dir / "sums-current.txt"
+                ).read_text()
+                new_sum_current = self.context.previous_artifact_metadata.services[
+                    service_name
+                ]["image"]["hash"]
+                if prepared_sum_current != new_sum_current:
+                    raise ManifestContentException(
+                        f"The image {prepared_sum_new} could not be prepared for service {service_name} as a delta from {new_sum_current} as it already exists as a delta from {prepared_sum_current}"
+                    )
+            # The prepared image metadata matches that which is needed for this image; skip further prep
+            return None
+        else:
+            artifact_image_prep_dir.mkdir()
+            (artifact_image_prep_dir / "sums-new.txt").write_text(service_image["hash"])
+            (artifact_image_prep_dir / "url-new.txt").write_text(service_image["ref"])
 
         # For non-delta artifacts or new services, the image as a whole is included in the artifact
         if (
@@ -319,7 +353,7 @@ class LifecycleHelperArtifact:
         Determine the services metadata for the current artifact, including reading the image hashes from remote images when required. To establish this list, any provided service-file image archives are extracted and read.
 
         :param context: The context of the lifecycle helper execution.
-        :raises ManifestContentMismatchException: If service name in args not found in manifest.
+        :raises ManifestContentException: If service name in args not found in manifest.
         :return: The services to be included in the current artifact, in the following dict structure:
             {
                 serviceName: {
@@ -374,7 +408,7 @@ class LifecycleHelperArtifact:
         for service_name, service_filename in context.service_files.items():
             if service_name not in context.manifest["services"]:
                 # Cannot map specified service name to service in the manifest
-                raise ManifestContentMismatchException(
+                raise ManifestContentException(
                     f"Service {service_name} specified to map to service file {service_filename} not found in manifest."
                 )
 
@@ -382,7 +416,7 @@ class LifecycleHelperArtifact:
         for service_name, image_override in context.service_images.items():
             if service_name not in context.manifest["services"]:
                 # Cannot map specified service name to service in the manifest
-                raise ManifestContentMismatchException(
+                raise ManifestContentException(
                     f"Service {service_name} specified to map to service image override {image_override} not found in manifest."
                 )
 

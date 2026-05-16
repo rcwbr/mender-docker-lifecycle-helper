@@ -1,17 +1,20 @@
-import logging
 import json
-import tarfile
-import yaml
+import logging
 import pytest
+import tarfile
+import time
+import yaml
+
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 from mender_docker_lifecycle_helper.artifact import (
     LifecycleHelperArtifact,
-    ManifestContentMismatchException,
+    ManifestContentException,
 )
+from mender_docker_lifecycle_helper.utils.deep_delta import ImageDeltaException
 from mender_docker_lifecycle_helper.utils.image_cache import ImageCache
-
 
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler()
@@ -129,6 +132,359 @@ class TestPrepImage:
         assert (artifact_image_path / "image.img").exists()
         # TODO open tar and verify contents
 
+    def test_prep_image_raises_manifest_content_exception_on_ref_mismatch(
+        self, tmp_path
+    ):
+        """Test that prep_image raises ManifestContentException when prepared image ref doesn't match."""
+
+        context_mock = MagicMock()
+        context_mock.logger = logger
+        context_mock.delta = False
+        context_mock.previous_artifact_metadata = SimpleNamespace(
+            services={}, version="1.0.0"
+        )
+        context_mock.manifest_name = "test"
+        context_mock.platform = "linux/amd64"
+        context_mock.image_cache = MagicMock()
+
+        # Create a pre-prepared image directory with conflicting metadata
+        artifact_images_path = tmp_path / "artifact"
+        artifact_images_path.mkdir()
+        image_dir = (
+            artifact_images_path
+            / "hash11111111111111111111111111111111111111111111111111"
+        )
+        image_dir.mkdir()
+        (image_dir / "sums-new.txt").write_text(
+            "hash11111111111111111111111111111111111111111111111111"
+        )
+        (image_dir / "url-new.txt").write_text("busybox:old-ref")
+
+        helper_artifact = LifecycleHelperArtifact(
+            context_mock,
+            "test",
+            SimpleNamespace(
+                services={
+                    "serviceA": {
+                        "image": {
+                            "ref": "busybox:new-ref",
+                            "hash": "hash11111111111111111111111111111111111111111111111111",
+                        }
+                    }
+                },
+                to_dict=lambda: "none",
+            ),
+            tmp_path / "artifact.mender",
+        )
+
+        # Should raise because the ref doesn't match
+        with pytest.raises(ManifestContentException) as exc_info:
+            helper_artifact.prep_image(
+                "serviceA",
+                {
+                    "ref": "busybox:new-ref",
+                    "hash": "hash11111111111111111111111111111111111111111111111111",
+                },
+                artifact_images_path,
+            )
+
+        assert "could not be prepared" in str(exc_info.value)
+        assert "already assigned to" in str(exc_info.value)
+
+    def test_prep_image_raises_manifest_content_exception_delta_vs_nondelta(
+        self, tmp_path
+    ):
+        """Test that prep_image raises ManifestContentException when delta req conflicts with existing non-delta."""
+
+        context_mock = MagicMock()
+        context_mock.logger = logger
+        context_mock.delta = True  # Now we want a delta
+        context_mock.previous_artifact_metadata = SimpleNamespace(
+            services={
+                "serviceA": {
+                    "image": {
+                        "ref": "busybox:old",
+                        "hash": "oldhash00000000000000000000000000000000000000000000000000",
+                    }
+                }
+            },
+            version="1.0.0",
+        )
+        context_mock.manifest_name = "test"
+        context_mock.platform = "linux/amd64"
+        context_mock.image_cache = MagicMock()
+
+        # Create a pre-prepared image directory WITHOUT deep_delta (non-delta)
+        artifact_images_path = tmp_path / "artifact"
+        artifact_images_path.mkdir()
+        image_dir = (
+            artifact_images_path
+            / "hash11111111111111111111111111111111111111111111111111"
+        )
+        image_dir.mkdir()
+        (image_dir / "sums-new.txt").write_text(
+            "hash11111111111111111111111111111111111111111111111111"
+        )
+        (image_dir / "url-new.txt").write_text("busybox:new-ref")
+        # Note: NO deep_delta file - this is a non-delta prepared image
+
+        helper_artifact = LifecycleHelperArtifact(
+            context_mock,
+            "test",
+            SimpleNamespace(
+                services={
+                    "serviceB": {
+                        "image": {
+                            "ref": "busybox:new-ref",
+                            "hash": "hash11111111111111111111111111111111111111111111111111",
+                        }
+                    }
+                },
+                to_dict=lambda: "none",
+            ),
+            tmp_path / "artifact.mender",
+        )
+
+        # Should raise because we want delta but it's not a delta
+        with pytest.raises(ManifestContentException) as exc_info:
+            helper_artifact.prep_image(
+                "serviceB",
+                {
+                    "ref": "busybox:new-ref",
+                    "hash": "hash11111111111111111111111111111111111111111111111111",
+                },
+                artifact_images_path,
+            )
+
+        assert "could not be prepared for service serviceB as a delta" in str(
+            exc_info.value
+        )
+        assert "already assigned to" in str(exc_info.value)
+
+    def test_prep_image_raises_manifest_content_exception_delta_previous_hash_mismatch(
+        self, tmp_path
+    ):
+        """Test that prep_image raises ManifestContentException when delta previous hash doesn't match."""
+        context_mock = MagicMock()
+        context_mock.logger = logger
+        context_mock.delta = True
+        context_mock.previous_artifact_metadata = SimpleNamespace(
+            services={
+                "serviceA": {
+                    "image": {
+                        "ref": "busybox:oldA",
+                        "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    }
+                },
+                "serviceB": {
+                    "image": {
+                        "ref": "busybox:oldB",
+                        "hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                    }
+                },
+            },
+            version="1.0.0",
+        )
+        context_mock.manifest_name = "test"
+        context_mock.platform = "linux/amd64"
+        context_mock.image_cache = MagicMock()
+
+        # Create a pre-prepared image directory WITH deep_delta for serviceA (from aaa...)
+        artifact_images_path = tmp_path / "artifact"
+        artifact_images_path.mkdir()
+        image_dir = (
+            artifact_images_path
+            / "newhash1111111111111111111111111111111111111111111111"
+        )
+        image_dir.mkdir()
+        (image_dir / "sums-new.txt").write_text(
+            "newhash1111111111111111111111111111111111111111111111"
+        )
+        (image_dir / "url-new.txt").write_text("busybox:new")
+        (image_dir / "deep_delta").touch()
+        (image_dir / "sums-current.txt").write_text(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        )  # Previous hash for serviceA
+        (image_dir / "url-current.txt").write_text("busybox:oldA")
+
+        helper_artifact = LifecycleHelperArtifact(
+            context_mock,
+            "test",
+            SimpleNamespace(
+                services={
+                    "serviceB": {
+                        "image": {
+                            "ref": "busybox:new",
+                            "hash": "newhash1111111111111111111111111111111111111111111111",
+                        }
+                    }
+                },
+                to_dict=lambda: "none",
+            ),
+            tmp_path / "artifact.mender",
+        )
+
+        # Should raise because previous hash for serviceB (bbb...) doesn't match prepared (aaa...)
+        with pytest.raises(ManifestContentException) as exc_info:
+            helper_artifact.prep_image(
+                "serviceB",
+                {
+                    "ref": "busybox:new",
+                    "hash": "newhash1111111111111111111111111111111111111111111111",
+                },
+                artifact_images_path,
+            )
+
+        assert "could not be prepared for service serviceB as a delta from" in str(
+            exc_info.value
+        )
+        assert "as it already exists as a delta from" in str(exc_info.value)
+
+    def test_prep_image_short_circuits_on_matching_metadata_nondelta(self, tmp_path):
+        """Test that prep_image returns early when metadata matches and not a delta update."""
+
+        context_mock = MagicMock()
+        context_mock.logger = logger
+        context_mock.delta = False  # Non-delta context
+        context_mock.previous_artifact_metadata = SimpleNamespace(
+            services={}, version="1.0.0"
+        )
+        context_mock.manifest_name = "test"
+        context_mock.platform = "linux/amd64"
+        context_mock.image_cache = MagicMock()
+
+        # Create a pre-prepared image directory with matching metadata
+        artifact_images_path = tmp_path / "artifact"
+        artifact_images_path.mkdir()
+        image_dir = (
+            artifact_images_path
+            / "hash11111111111111111111111111111111111111111111111111"
+        )
+        image_dir.mkdir()
+        (image_dir / "sums-new.txt").write_text(
+            "hash11111111111111111111111111111111111111111111111111"
+        )
+        (image_dir / "url-new.txt").write_text("busybox:ref")
+
+        helper_artifact = LifecycleHelperArtifact(
+            context_mock,
+            "test",
+            SimpleNamespace(
+                services={
+                    "serviceA": {
+                        "image": {
+                            "ref": "busybox:ref",
+                            "hash": "hash11111111111111111111111111111111111111111111111111",
+                        }
+                    }
+                },
+                to_dict=lambda: "none",
+            ),
+            tmp_path / "artifact.mender",
+        )
+
+        # Store original mtime
+        original_mtime = (image_dir / "sums-new.txt").stat().st_mtime
+        time.sleep(0.1)
+
+        # Should short-circuit - no exception, no new files
+        helper_artifact.prep_image(
+            "serviceA",
+            {
+                "ref": "busybox:ref",
+                "hash": "hash11111111111111111111111111111111111111111111111111",
+            },
+            artifact_images_path,
+        )
+
+        # Verify image_cache methods were not called (short-circuit)
+        context_mock.image_cache.assert_not_called()
+        context_mock.image_cache.save_cache_image.assert_not_called()
+
+        # Verify mtime didn't change
+        assert (image_dir / "sums-new.txt").stat().st_mtime == original_mtime
+
+    def test_prep_image_short_circuits_on_matching_metadata_with_delta(self, tmp_path):
+        """Test that prep_image returns early when metadata matches and delta checks pass."""
+
+        context_mock = MagicMock()
+        context_mock.logger = logger
+        context_mock.delta = True
+        context_mock.previous_artifact_metadata = SimpleNamespace(
+            services={
+                "serviceA": {
+                    "image": {
+                        "ref": "busybox:old",
+                        "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    }
+                },
+                "serviceB": {
+                    "image": {
+                        "ref": "busybox:old",
+                        "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    }
+                },
+            },
+            version="1.0.0",
+        )
+        context_mock.manifest_name = "test"
+        context_mock.platform = "linux/amd64"
+        context_mock.image_cache = MagicMock()
+
+        # Create a pre-prepared image directory WITH deep_delta for same previous hash
+        artifact_images_path = tmp_path / "artifact"
+        artifact_images_path.mkdir()
+        image_dir = (
+            artifact_images_path
+            / "newhash1111111111111111111111111111111111111111111111"
+        )
+        image_dir.mkdir()
+        (image_dir / "sums-new.txt").write_text(
+            "newhash1111111111111111111111111111111111111111111111"
+        )
+        (image_dir / "url-new.txt").write_text("busybox:new")
+        (image_dir / "deep_delta").touch()
+        (image_dir / "sums-current.txt").write_text(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        )  # Same previous hash for both services
+        (image_dir / "url-current.txt").write_text("busybox:old")
+
+        helper_artifact = LifecycleHelperArtifact(
+            context_mock,
+            "test",
+            SimpleNamespace(
+                services={
+                    "serviceB": {
+                        "image": {
+                            "ref": "busybox:new",
+                            "hash": "newhash1111111111111111111111111111111111111111111111",
+                        }
+                    }
+                },
+                to_dict=lambda: "none",
+            ),
+            tmp_path / "artifact.mender",
+        )
+
+        original_mtime = (image_dir / "sums-new.txt").stat().st_mtime
+        time.sleep(0.1)
+
+        # Should short-circuit - same hash, same previous hash, delta=True but already prepared
+        helper_artifact.prep_image(
+            "serviceB",
+            {
+                "ref": "busybox:new",
+                "hash": "newhash1111111111111111111111111111111111111111111111",
+            },
+            artifact_images_path,
+        )
+
+        # Verify image_cache.delta was not called (short-circuit)
+        context_mock.image_cache.delta.assert_not_called()
+
+        # Verify mtime didn't change
+        assert (image_dir / "sums-new.txt").stat().st_mtime == original_mtime
+
 
 class TestPrepImages:
     """Tests for the prep_images function."""
@@ -178,8 +534,6 @@ class TestPrepImages:
 
     def test_prep_image_handles_image_delta_exception(self, tmp_path):
         """Test that prep_image handles ImageDeltaException from prep_delta_image."""
-        from unittest.mock import patch, MagicMock
-        from mender_docker_lifecycle_helper.utils.deep_delta import ImageDeltaException
 
         context_mock = MagicMock()
         context_mock.delta = True
@@ -589,7 +943,7 @@ class TestGenArtifactServices:
         }
 
     def test_gen_artifact_services_service_image_manifest_content_mismatch(self):
-        """Test gen_artifact_services raises ManifestContentMismatchException when hash in service image metadata mismatches."""
+        """Test gen_artifact_services raises ManifestContentException when hash in service image metadata mismatches."""
         context = SimpleNamespace(
             service_files={},
             service_images={"service2": "busybox:not-latest"},
@@ -609,11 +963,11 @@ class TestGenArtifactServices:
             services={}, version="1.0.0"
         )
 
-        with pytest.raises(ManifestContentMismatchException):
+        with pytest.raises(ManifestContentException):
             LifecycleHelperArtifact.gen_artifact_services(context)
 
     def test_gen_artifact_services_service_file_manifest_content_mismatch(self):
-        """Test gen_artifact_services raises ManifestContentMismatchException when hash in service file metadata mismatches."""
+        """Test gen_artifact_services raises ManifestContentException when hash in service file metadata mismatches."""
         context = SimpleNamespace(
             service_files={"service3": "this-file"},
             service_images={},
@@ -633,5 +987,5 @@ class TestGenArtifactServices:
             services={}, version="1.0.0"
         )
 
-        with pytest.raises(ManifestContentMismatchException):
+        with pytest.raises(ManifestContentException):
             LifecycleHelperArtifact.gen_artifact_services(context)
