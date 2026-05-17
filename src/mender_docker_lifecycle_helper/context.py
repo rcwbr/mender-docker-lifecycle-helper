@@ -19,7 +19,21 @@ from mender_docker_lifecycle_helper.utils.container_utils import (
 )
 
 
-LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR"]
+LOG_COLORS = {
+    "DEBUG": "\033[1;34m",  # Blue
+    "INFO": "\033[1;32m",  # Green
+    "WARNING": "\033[1;33m",  # Yellow
+    "ERROR": "\033[1;31m",  # Red
+    "CRITICAL": "\033[1;41m",  # Red on background
+}
+LOG_LEVELS = list(LOG_COLORS.keys())
+
+
+# Adapted from https://sqlpey.com/python/solved-how-to-add-color-to-python-logging-output/
+class ColorLogFormatter(logging.Formatter):
+    def format(self, record):
+        color = LOG_COLORS.get(record.levelname, "\033[0m")
+        return f"{color}{super().format(record)}\033[0m"
 
 
 class LifecycleHelperContext:
@@ -155,8 +169,9 @@ class LifecycleHelperContext:
         """
         logger = logging.getLogger(__name__)
         handler = logging.StreamHandler()
-        formatter = logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s")
-        handler.setFormatter(formatter)
+        handler.setFormatter(
+            ColorLogFormatter("[%(asctime)s] %(levelname)s: %(message)s")
+        )
         logger.addHandler(handler)
         logger.setLevel(getattr(logging, log_level))
         return logger
