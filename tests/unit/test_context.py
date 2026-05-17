@@ -409,6 +409,7 @@ class TestLifecycleHelperContextInitIntegration:
         assert context.image_cache.delta_cache_dir == cache_dir / "images" / "delta"
         assert context.image_cache.extract_cache_dir == cache_dir / "images" / "extract"
         assert context.image_cache.save_cache_dir == cache_dir / "images" / "save"
+        assert context.image_cache.platform == "platform"
         assert context.logger.level == getattr(logging, "DEBUG")
         assert context.manifest_file == manifest_file
         assert context.manifest == {

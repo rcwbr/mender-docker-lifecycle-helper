@@ -1,6 +1,7 @@
 import logging
 import subprocess
 
+from itertools import zip_longest
 from pathlib import Path
 
 DAEMON_TRANSPORT = "docker-daemon:"
@@ -136,27 +137,48 @@ def get_image_hash(
 
 
 def save_registry_image_to_file(
-    image_ref: str, file: Path
+    image_ref: str, file: Path, platform: str = None
 ) -> subprocess.CompletedProcess:
     """
     Saves the specified container image from a registry to the specified file.
 
     :param image_ref: The ref of the image to save.
     :param file: The path of the file to which to save the image.
+    :param platform: The platform for which to save the image, as os/arch[/variant].
     :raises ImageNotFoundException: If the save operation cannot find the image.
     :return: The completed process from the subprocess call.
     """
 
     image_ref = _image_ref_hash_or_tag(*_split_image_ref(image_ref))
+
+    platform_dict = {"os": None, "arch": None, "variant": None}
+    if platform is not None:
+        platform_values = platform.split("/")
+        platform_fields = platform_dict.keys()
+        platform_dict = dict(
+            zip_longest(platform_fields, platform_values, fillvalue=None)
+        )
+
     # skopeo copy docker://<image_ref> oci-archive:<file>
     try:
-        result = subprocess.run(
+        cmd = [
+            SKOPEO_BIN,
+            "copy",
+        ]
+        if platform_dict["os"] is not None:
+            cmd.extend(["--override-os", platform_dict["os"]])
+        if platform_dict["arch"] is not None:
+            cmd.extend(["--override-arch", platform_dict["arch"]])
+        if platform_dict["variant"] is not None:
+            cmd.extend(["--override-variant", platform_dict["variant"]])
+        cmd.extend(
             [
-                SKOPEO_BIN,
-                "copy",
                 f"{REGISTRY_TRANSPORT}{image_ref}",
                 f"{OCI_TRANSPORT}:{file}",
-            ],
+            ]
+        )
+        result = subprocess.run(
+            cmd,
             capture_output=True,
             check=True,
         )
@@ -219,13 +241,14 @@ def save_local_image_to_file(
 
 
 def save_image_to_file(
-    image: dict[str, str], file: Path
+    image: dict[str, str], file: Path, platform: str = None
 ) -> subprocess.CompletedProcess:
     """
     Saves the specified container image to the specified file.
 
     :param image: The metadata (as {ref: <ref>, hash: <hash>}) of the image to save.
     :param file: The path of the file to which to save the image.
+    :param platform: The platform for which to save the image, as os/arch[/variant].
     :raises ImageRefHashMismatchException: If the metadata ref contains a hash that does not match the provided metadata hash.
     :raises ImageNotFoundException: If the image cannot be found.
     :return: The completed process from the subprocess call.
@@ -244,7 +267,7 @@ def save_image_to_file(
         return save_local_image_to_file(image_hash, file)
     except ImageNotFoundException:
         try:
-            return save_registry_image_to_file(image_ref, file)
+            return save_registry_image_to_file(image_ref, file, platform)
         except ImageNotFoundException:
             raise ImageNotFoundException(
                 f"Image with ref {image_ref} not found in local daemon or remote registry"

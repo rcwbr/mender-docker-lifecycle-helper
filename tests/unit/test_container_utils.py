@@ -161,6 +161,62 @@ class TestSaveRegistryImageToFile:
                 check=True,
             )
 
+    def test_save_registry_image_to_file_success_with_platform(self, tmp_path):
+        """Test that save_registry_image_to_file calls skopeo with platform arguments."""
+        file_path = tmp_path / "image.tar"
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=0)
+            save_registry_image_to_file(
+                "my-registry.com/my-image:latest", file_path, "linux/amd64"
+            )
+
+            mock_run.assert_called_once_with(
+                f"skopeo copy --override-os linux --override-arch amd64 docker://my-registry.com/my-image:latest oci-archive:{file_path}".split(
+                    " "
+                ),
+                capture_output=True,
+                check=True,
+            )
+
+    def test_save_registry_image_to_file_success_with_platform_only_os(self, tmp_path):
+        """Test that save_registry_image_to_file calls skopeo with only os override."""
+        file_path = tmp_path / "image.tar"
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=0)
+            save_registry_image_to_file(
+                "my-registry.com/my-image:latest", file_path, "linux"
+            )
+
+            mock_run.assert_called_once_with(
+                f"skopeo copy --override-os linux docker://my-registry.com/my-image:latest oci-archive:{file_path}".split(
+                    " "
+                ),
+                capture_output=True,
+                check=True,
+            )
+
+    def test_save_registry_image_to_file_success_with_platform_and_variant(
+        self, tmp_path
+    ):
+        """Test that save_registry_image_to_file calls skopeo with platform and variant arguments."""
+        file_path = tmp_path / "image.tar"
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=0)
+            save_registry_image_to_file(
+                "my-registry.com/my-image:latest", file_path, "linux/arm/v7"
+            )
+
+            mock_run.assert_called_once_with(
+                f"skopeo copy --override-os linux --override-arch arm --override-variant v7 docker://my-registry.com/my-image:latest oci-archive:{file_path}".split(
+                    " "
+                ),
+                capture_output=True,
+                check=True,
+            )
+
     def test_save_registry_image_to_file_not_found(self, tmp_path):
         """Test that save_registry_image_to_file raises ImageNotFoundException when image not found in registry."""
         image_ref = "my-registry.com/my-image:latest"
@@ -302,7 +358,7 @@ class TestSaveImageToFile:
                 # When ref has no hash prefix, the registry fallback appends the hash to the ref
                 # The ref here is "my-image" so appending "sha256:..." gives "my-image@sha256:..."
                 mock_registry.assert_called_once_with(
-                    "my-image@sha256:1234567890abcdef", file_path
+                    "my-image@sha256:1234567890abcdef", file_path, None
                 )
 
     def test_save_image_to_file_registry_fallback_success_hash_in_ref(self, tmp_path):
@@ -323,7 +379,29 @@ class TestSaveImageToFile:
                 mock_local.assert_called_once_with(image["hash"], file_path)
                 # If REF_HASH_PREFIX is already in image_ref, it does not append the hash, but uses the original image_ref
                 mock_registry.assert_called_once_with(
-                    "my-image@sha256:1234567890abcdef", file_path
+                    "my-image@sha256:1234567890abcdef", file_path, None
+                )
+
+    def test_save_image_to_file_registry_fallback_success_hash_in_ref_with_platform(
+        self, tmp_path
+    ):
+        """Test that save_image_to_file passes platform to registry on fallback with hash in ref."""
+        image = {"ref": "my-image@sha256:1234567890abcdef", "hash": "1234567890abcdef"}
+        file_path = tmp_path / "image.tar"
+
+        with patch(
+            "mender_docker_lifecycle_helper.utils.container_utils.save_local_image_to_file"
+        ) as mock_local:
+            with patch(
+                "mender_docker_lifecycle_helper.utils.container_utils.save_registry_image_to_file"
+            ) as mock_registry:
+                mock_local.side_effect = ImageNotFoundException("local fail")
+
+                save_image_to_file(image, file_path, "linux/amd64")
+
+                mock_local.assert_called_once_with(image["hash"], file_path)
+                mock_registry.assert_called_once_with(
+                    "my-image@sha256:1234567890abcdef", file_path, "linux/amd64"
                 )
 
     def test_save_image_to_file_both_fail(self, tmp_path):

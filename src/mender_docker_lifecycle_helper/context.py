@@ -66,7 +66,9 @@ class LifecycleHelperContext:
 
         if args.cache_operation_only:
             self.cache_dir = self._prep_cache_dir(args.cache_dir)
-            self.image_cache = ImageCache(self.cache_dir / "images", logger=self.logger)
+            self.image_cache = ImageCache(
+                self.cache_dir / "images", platform=self.platform, logger=self.logger
+            )
 
             if args.clear_cache:
                 self.clear_cache()
@@ -120,7 +122,9 @@ class LifecycleHelperContext:
             self.cache_dir = Path(
                 self.repo_root_dir / ".mender-docker-lifecycle-helper"
             )
-        self.image_cache = ImageCache(self.cache_dir / "images", logger=self.logger)
+        self.image_cache = ImageCache(
+            self.cache_dir / "images", platform=self.platform, logger=self.logger
+        )
         self.temp_dir = self.cache_dir / "temp"
         self.temp_dir.mkdir(parents=True)
 

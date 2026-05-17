@@ -34,7 +34,8 @@ class LifecycleHelperContextMock:
         self.logger = logger
 
         self.manifest_name = "app"
-        self.image_cache = ImageCache(cache_path / "images")
+        self.platform = "linux/amd64"
+        self.image_cache = ImageCache(cache_path / "images", platform=self.platform)
         self.mender_host = "https://hosted.mender.io"
         self.previous_artifact_metadata = SimpleNamespace(
             services={
@@ -48,7 +49,6 @@ class LifecycleHelperContextMock:
             version="0.1.0",
         )
         self.version = "1.0.0"
-        self.platform = "linux/amd64"
         self.delta = True
 
 
@@ -642,7 +642,9 @@ class TestPrepArtifactDir:
             delta=True,
             manifest_file=(tmp_path / "docker-compose.yml"),
             manifest={"services": {"serviceA": {"image": "busybox:1.37.0-musl"}}},
-            image_cache=ImageCache(tmp_path / "cache" / "images"),
+            image_cache=ImageCache(
+                tmp_path / "cache" / "images", platform="linux/amd64"
+            ),
         )
         helper_artifact = LifecycleHelperArtifact(
             context_mock,
@@ -722,7 +724,9 @@ class TestGenArtifact:
             temp_dir=(tmp_path / "cache"),
             device_type="virtual",
             delta=True,
-            image_cache=ImageCache(tmp_path / "cache" / "images"),
+            image_cache=ImageCache(
+                tmp_path / "cache" / "images", platform="linux/amd64"
+            ),
             logger=logger,
             manifest_name="test",
             manifest_file=(tmp_path / "docker-compose.yml"),
@@ -798,7 +802,9 @@ class TestGenArtifact:
             temp_dir=(tmp_path / "cache"),
             device_type="virtual",
             delta=False,
-            image_cache=ImageCache(tmp_path / "cache" / "images"),
+            image_cache=ImageCache(
+                tmp_path / "cache" / "images", platform="linux/amd64"
+            ),
             logger=logger,
             manifest_name="test",
             manifest_file=(tmp_path / "docker-compose.yml"),

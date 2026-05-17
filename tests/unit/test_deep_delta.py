@@ -747,8 +747,8 @@ class TestDeepDeltaIntegration:
         # Create temporary cache directory
         cache_dir = tmp_path / "cache"
 
-        # Initialize cache
-        cache = ImageCache(cache_dir)
+        # Initialize cache with platform
+        cache = ImageCache(cache_dir, platform="linux/amd64")
 
         # Use the two specific busybox image hashes
         from_hash = "3f9777e7e82e8591542f72b965ec7db7e8b3bdb59692976af1bb9b2850b05a4e"
@@ -757,7 +757,7 @@ class TestDeepDeltaIntegration:
         # Generate delta file - this will pull images and extract them
         from_image = {"ref": "busybox:1.37.0-glibc", "hash": from_hash}
         to_image = {"ref": "busybox:1.37.0-musl", "hash": to_hash}
-        delta_file = cache.delta(from_image, to_image, "linux/amd64")
+        delta_file = cache.delta(from_image, to_image)
 
         # Verify delta file was created with correct contents
         extract_dir = tmp_path / "delta_extract"

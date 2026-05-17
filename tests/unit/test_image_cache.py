@@ -108,18 +108,17 @@ class TestImageCacheDelta:
         delta_file = from_dir / "image.img"
         delta_file.touch()
 
-        cache = ImageCache(tmp_path)
+        cache = ImageCache(tmp_path, platform="linux/amd64")
 
         result = cache.delta(
             {"ref": "from-image", "hash": "hash1"},
             {"ref": "to-image", "hash": "hash2"},
-            "linux/amd64",
         )
         assert result == delta_file
 
     def test_delta_mock_oci_deep_delta(self, tmp_path):
         """Test that delta calls oci_deep_delta with expected inputs."""
-        cache = ImageCache(tmp_path)
+        cache = ImageCache(tmp_path, platform="linux/amd64")
 
         # Prepare test images in cache
         from_tar = _create_oci_tar(
@@ -144,7 +143,6 @@ class TestImageCacheDelta:
             result = cache.delta(
                 {"ref": "from-image", "hash": "from_hash"},
                 {"ref": "to-image", "hash": "to_hash"},
-                "linux/amd64",
             )
 
             # Verify oci_deep_delta was called with correct parameters
@@ -167,7 +165,7 @@ class TestImageCacheDelta:
 
     def test_delta_cached_does_not_call_oci_deep_delta(self, tmp_path):
         """Test that a second delta() call with same inputs returns cached path without calling oci_deep_delta."""
-        cache = ImageCache(tmp_path)
+        cache = ImageCache(tmp_path, platform="linux/amd64")
 
         # Prepare test images in cache
         from_tar = _create_oci_tar(
@@ -189,7 +187,6 @@ class TestImageCacheDelta:
             result1 = cache.delta(
                 {"ref": "from-image", "hash": "from_hash"},
                 {"ref": "to-image", "hash": "to_hash"},
-                "linux/amd64",
             )
             assert result1 == mock_return_path
             assert mock_oci.call_count == 1
@@ -198,7 +195,6 @@ class TestImageCacheDelta:
             result2 = cache.delta(
                 {"ref": "from-image", "hash": "from_hash"},
                 {"ref": "to-image", "hash": "to_hash"},
-                "linux/amd64",
             )
             assert result2 == mock_return_path
             assert mock_oci.call_count == 1
@@ -484,7 +480,7 @@ class TestImageCacheExtractCacheImage:
         )
 
         # Mock save_image_to_file to copy the dummy tar in place of pulling from docker
-        def fake_save_image_to_file(image, file):
+        def fake_save_image_to_file(image, file, platform=None):
             shutil.copy(tar_path, file)
 
         monkeypatch.setattr(
@@ -512,9 +508,9 @@ class TestImageCacheSaveCacheImage:
         # Track calls to save_image_to_file
         calls = []
 
-        def fake_save_image_to_file(image, file):
+        def fake_save_image_to_file(image, file, platform=None):
             file.touch()
-            calls.append((image, file))
+            calls.append((image, file, platform))
 
         monkeypatch.setattr(
             "mender_docker_lifecycle_helper.utils.image_cache.save_image_to_file",
@@ -537,6 +533,39 @@ class TestImageCacheSaveCacheImage:
 
         assert result.exists()
         assert len(calls) == 1
+        assert calls[0][2] is None
+
+    def test_save_cache_image_with_platform(self, tmp_path, monkeypatch):
+        """Test that save_cache_image passes platform to save_image_to_file."""
+        # Track calls to save_image_to_file
+        calls = []
+
+        def fake_save_image_to_file(image, file, platform=None):
+            file.touch()
+            calls.append((image, file, platform))
+
+        monkeypatch.setattr(
+            "mender_docker_lifecycle_helper.utils.image_cache.save_image_to_file",
+            fake_save_image_to_file,
+        )
+
+        tar_path = _create_oci_tar(
+            tmp_path, image_name="test-image", digest="sha256oldhash"
+        )
+        cache = ImageCache(tmp_path)
+
+        # First extract to populate save cache
+        cache.extract_cache_file(tar_path)
+
+        # Create new cache with platform and save an image
+        cache2 = ImageCache(tmp_path, platform="linux/amd64")
+        image = {"ref": "new-image", "hash": "sha256newhash"}
+
+        result = cache2.save_cache_image(image)
+
+        assert result.exists()
+        assert len(calls) == 1
+        assert calls[0][2] == "linux/amd64"
 
     def test_save_cache_image_existing_image_updates_timestamp(self, tmp_path):
         """Test that save_cache_image updates file timestamp for existing image."""

@@ -34,6 +34,7 @@ class ImageCache:
     def __init__(
         self,
         cache_dir: Path,
+        platform: str | None = None,
         delta_cache_dirname: str | None = DELTA_CACHE_DIRNAME,
         extract_cache_dirname: str | None = EXTRACT_CACHE_DIRNAME,
         image_file_name: str | None = IMAGE_FILE_NAME,
@@ -44,6 +45,7 @@ class ImageCache:
         Construct an ImageCache object, reading cache dir contents into maps if present or creating them as empty dirs.
 
         :param cache_dir: The top-level directory of the image cache.
+        :param platform: The platform for which to save images, as os/arch[/variant].
         :param delta_cache_dirname: The name of the subdirectory for image deltas, defaults to DELTA_CACHE_DIRNAME.
         :param extract_cache_dirname: The name of the subdirectory for image extracts, defaults to EXTRACT_CACHE_DIRNAME.
         :param image_file_name: The filename to use for image save files, defaults to IMAGE_FILE_NAME.
@@ -52,6 +54,7 @@ class ImageCache:
         """
         self.logger = logger
         self.image_file_name = image_file_name
+        self.platform = platform
         self.cache_dir = cache_dir
 
         cache_dir.mkdir(parents=True, exist_ok=True)
@@ -81,15 +84,12 @@ class ImageCache:
             if hash_dir.is_dir()
         }
 
-    def delta(
-        self, from_image: dict[str, str], to_image: dict[str, str], target_platform: str
-    ) -> Path:
+    def delta(self, from_image: dict[str, str], to_image: dict[str, str]) -> Path:
         """
         Get the delta file path for a given from and to image hash, creating folders if required.
 
         :param from_image: The metadata (specifically {ref: <ref>, hash: <hash>}) of the image from which the delta is defined.
         :param to_image: The metadata (specifically {ref: <ref>, hash: <hash>}) of the image to which the delta is defined.
-        :param target_platform: The platform to target, if the image contains multiple, as os/[architecture]/[variant].
         :return: The path to the delta file for the given from and to image hash.
         """
         from_hash = from_image["hash"]
@@ -113,7 +113,7 @@ class ImageCache:
                 self.extract_cache_image(to_image),
                 delta_dir,
                 self.image_file_name,
-                target_platform,
+                self.platform,
                 logger=self.logger,
             )
             if from_hash not in self.delta_cache:
@@ -255,7 +255,7 @@ class ImageCache:
             )
             save_image_dir.mkdir(parents=True, exist_ok=True)
             save_image_file = save_image_dir / self.image_file_name
-            save_image_to_file(image, save_image_file)
+            save_image_to_file(image, save_image_file, self.platform)
             self.logger.debug(f"Image file {save_image_file} saved.")
             self.save_cache[image_hash] = save_image_file
             return save_image_file
