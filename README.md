@@ -464,6 +464,7 @@ The full inputs for the workflow are as follows:
 | `platform`                  | ✓        | N/A                                                    | string | Platform with which the artifact is compatible (e.g., linux/arm/v7).                                                                 |
 | `service-files`             | ✗        | `''`                                                   | string | Image file overrides for services in the manifest_file, as a JSON array \["<service> <image file>", "<service> <image file>", ...\]. |
 | `service-images`            | ✗        | `''`                                                   | string | Image name overrides for services in the manifest_file, as a JSON array \["<service> <image>", "<service> <image>", ...\].           |
+| `wait-for-deploy`           | ✗        | `false`                                                | bool   | Wait for the deployment to finish before completing the workflow. When `false`, the workflow completes after artifact upload.        |
 | `helper-image`              | ✗        | `'ghcr.io/rcwbr/mender-docker-lifecycle-helper:1.4.0'` | string | Docker image to use as mender-docker-lifecycle-helper.                                                                               |
 | `secrets.mender-pat-secret` | ✓        | N/A                                                    | secret | Secret that contains the Mender server Personal Access Token to use for artifact upload and deployment.                              |
 

@@ -33,6 +33,11 @@ on:
         default: ''
         required: false
         type: string
+      wait-for-deploy:
+        description: Wait for the deployment to finish (succeed or fail).
+        default: false
+        required: false
+        type: boolean
       helper-image:
         description: Docker image to use as mender-docker-lifecycle-helper.
         default: 'ghcr.io/rcwbr/mender-docker-lifecycle-helper:1.4.0'
@@ -80,4 +85,5 @@ jobs:
             ${{ inputs.mender-host && format('--mender-host {0}', inputs.mender-host) || '' }} \
             ${{ inputs.service-images && format('--service-image {0}', join(fromJSON(inputs.service-images), '--service-image')) || '' }} \
             ${{ inputs.service-files && format('--service-file {0}', join(fromJSON(inputs.service-files), '--service-file')) || '' }} \
+            ${{ inputs.wait-for-deploy && '--wait-for-deploy' || '--no-wait-for-deploy' }} \
             ${{ inputs.manifest-file }}
