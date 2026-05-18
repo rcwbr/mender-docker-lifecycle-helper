@@ -517,8 +517,8 @@ class TestOCIDeepDelta:
                 for call in mock_read_layers.call_args_list:
                     assert call[0][1] == "linux/amd64"
 
-                # Should call subprocess.run for each layer pair (2 calls since from_layers has 2 items)
-                assert mock_subprocess.call_count == 2
+                # Should call subprocess.run for each layer pair + 1 extra for the additional layer in to_layers
+                assert mock_subprocess.call_count == 3
 
                 # Check that tarfile was called correctly
                 mock_tarfile.assert_called_once_with(delta_dir / "test-delta.tar", "w")
@@ -528,6 +528,65 @@ class TestOCIDeepDelta:
                 mock_rmtree.assert_called_once_with(delta_dir / "gen")
 
                 # Check result
+                assert result == delta_dir / "test-delta.tar"
+
+    def test_oci_deep_delta_extra_layers_in_to_image(self):
+        """Test oci_deep_delta handles extra layers in to image by creating full layer diffs."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            from_dir = Path(tmp_dir) / "from"
+            to_dir = Path(tmp_dir) / "to"
+            delta_dir = Path(tmp_dir) / "delta"
+
+            # Create basic directory structure
+            from_dir.mkdir()
+            to_dir.mkdir()
+            delta_dir.mkdir()
+
+            # Create fake layer files in to_dir (these will be copied by copytree)
+            (to_dir / "blobs" / "sha256" / "layer1").parent.mkdir(
+                parents=True, exist_ok=True
+            )
+            (to_dir / "blobs" / "sha256" / "layer1").touch()
+            (to_dir / "blobs" / "sha256" / "layer2").touch()
+            (to_dir / "blobs" / "sha256" / "layer3").touch()
+
+            # Create fake layer files in from_dir
+            (from_dir / "layer1").touch()
+            (from_dir / "layer2").touch()
+
+            with (
+                patch(
+                    "mender_docker_lifecycle_helper.utils.deep_delta._read_layers_from_manifest"
+                ) as mock_read_layers,
+                patch("subprocess.run") as mock_subprocess,
+                patch("tarfile.open"),
+                patch("shutil.rmtree"),
+            ):
+
+                # Setup mocks: to has 3 layers, from has 2 layers
+                mock_read_layers.side_effect = [
+                    [from_dir / "layer1", from_dir / "layer2"],  # from_layers
+                    [
+                        to_dir / "blobs" / "sha256" / "layer1",
+                        to_dir / "blobs" / "sha256" / "layer2",
+                        to_dir / "blobs" / "sha256" / "layer3",
+                    ],  # to_layers - has 1 extra layer
+                ]
+                mock_subprocess.return_value = subprocess.CompletedProcess(
+                    args=[], returncode=0
+                )
+
+                result = oci_deep_delta(
+                    from_dir, to_dir, delta_dir, "test-delta.tar", "linux/amd64"
+                )
+
+                # Should call subprocess.run 3 times (2 for regular diffs + 1 for extra layer)
+                assert mock_subprocess.call_count == 3
+
+                # Check the last call was for /dev/null source (index 4 after: xdelta3, -f, -e, -s)
+                last_call_args = mock_subprocess.call_args_list[-1][0][0]
+                assert str(last_call_args[4]) == "/dev/null"
+
                 assert result == delta_dir / "test-delta.tar"
 
     def test_oci_deep_delta_error_on_more_from_layers(self):

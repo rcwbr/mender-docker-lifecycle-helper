@@ -391,3 +391,136 @@ class TestIntegrationOCI:
         verify_manifest_containers_running(
             docker_host, manifest_file, f"{repo_dir.name}-prebuilt"
         )
+
+    def test_oci_deploy_five_iterations_delta(
+        self, custom_docker_daemon, mender_server, mender_client, tmp_path
+    ):
+        """Test deploying an OCI image and updating/redeploying it 5 times as delta artifacts."""
+        docker_host, _, _ = custom_docker_daemon
+        mender_host, jwt = mender_server
+        mender_client_id = mender_client
+        repo_dir, repo = prepare_repo(tmp_path)
+
+        device_group = "testcontainers-clients"
+        apply_client_to_group(mender_host, jwt, mender_client_id, device_group)
+
+        manifest_file = repo_dir / "prebuilt" / "docker-compose.yaml"
+        build_dir = tmp_path / "oci-build"
+        oci_tar_path = tmp_path / "multiplatform.oci"
+
+        # Step 1: Build and deploy initial multiplatform OCI image (v1.0.0)
+        # Keep busybox version consistent so delta layers can be computed
+        dockerfile_v1 = "FROM busybox:1.36.0-musl\n" "RUN echo test1 > /test-file\n"
+        oci_tar_v1 = _build_oci_tar(
+            tmp_path,
+            dockerfile_v1,
+            output_path=oci_tar_path,
+            bake_hcl='target "test-oci" {\n'
+            f'  context    = "{build_dir}"\n'
+            f'  dockerfile = "{build_dir}/Dockerfile"\n'
+            "   args = {\n"
+            "       BUILDKIT_MULTI_PLATFORM = 1\n"
+            "   }\n"
+            "   platforms = [\n"
+            '       "linux/amd64"\n'
+            "   ]\n"
+            "   annotations = [\n"
+            '       "index-descriptor:io.containerd.image.name=five-iterations-app:1.0.0"\n'
+            "   ]\n"
+            f'  output     = ["type=oci,dest={oci_tar_path}"]\n'
+            "}\n",
+        )
+
+        generate_and_validate_artifact(
+            tmp_path,
+            mender_host=mender_host,
+            jwt=jwt,
+            cache=True,
+            device_group=device_group,
+            repo_dir=repo_dir,
+            repo=repo,
+            service_files={"prebuilt-service": oci_tar_v1},
+            wait_for_deploy=True,
+        )
+
+        verify_manifest_containers_running(
+            docker_host, manifest_file, f"{repo_dir.name}-prebuilt"
+        )
+
+        # Steps 2-6: 5 iterations of update and redeploy as delta artifacts
+        # Each iteration changes an existing layer and adds an ADDITIONAL new layer
+        # Same base image (busybox:1.36.0) so delta computation can find common layers
+        # v1.0.0 has 1 layer (test-file), v1.0.5 should have 4 more = 5 layers total
+        versions = ["1.0.1", "1.0.2", "1.0.3", "1.0.4", "1.0.5"]
+        modified_contents = [
+            "modified2",
+            "modified3",
+            "modified4",
+            "modified5",
+            "modified6",
+        ]
+
+        for iteration, (version, mod_content) in enumerate(
+            zip(versions, modified_contents), start=1
+        ):
+            # Build new multiplatform OCI image
+            # Each iteration adds incrementally more layers than previous
+            # v1.0.0: 1 layer, v1.0.1: 2 layers, v1.0.2: 3 layers, v1.0.3: 4 layers
+            # v1.0.4: 5 layers, v1.0.5: stays at 5 layers (4 more than v1.0.0)
+            dockerfile_lines = [
+                "FROM busybox:1.36.0-musl",
+                f"RUN echo {mod_content} > /test-file",  # Modified existing layer
+            ]
+
+            # Each iteration adds 'iteration' new layers, capped so v1.0.5 has 4 more than v1.0.0
+            # v1.0.1: 1 layer, v1.0.2: 2, v1.0.3: 3, v1.0.4: 4, v1.0.5: 4 (capped)
+            num_layers = min(iteration, 4)
+            for i in range(1, num_layers + 1):
+                dockerfile_lines.append(f"RUN echo layer{i}_v{version} > /layer{i}.txt")
+
+            dockerfile = "\n".join(dockerfile_lines) + "\n"
+
+            oci_tar = _build_oci_tar(
+                tmp_path,
+                dockerfile,
+                output_path=oci_tar_path,
+                bake_hcl='target "test-oci" {\n'
+                f'  context    = "{build_dir}"\n'
+                f'  dockerfile = "{build_dir}/Dockerfile"\n'
+                "   args = {\n"
+                "       BUILDKIT_MULTI_PLATFORM = 1\n"
+                "   }\n"
+                "   platforms = [\n"
+                '       "linux/amd64"\n'
+                "   ]\n"
+                f"   annotations = [\n"
+                f'       "index-descriptor:io.containerd.image.name=five-iterations-app:{version}"\n'
+                "   ]\n"
+                f'  output     = ["type=oci,dest={oci_tar_path}"]\n'
+                "}\n",
+            )
+
+            # Update version in repo
+            (repo_dir / "VERSION").write_text(version)
+            repo.index.add([repo_dir / "VERSION"])
+            repo.index.commit(f"update to {version}")
+            repo.create_tag(version)
+
+            # Deploy as delta artifact
+            generate_and_validate_artifact(
+                tmp_path,
+                mender_host=mender_host,
+                jwt=jwt,
+                cache=True,
+                delta=True,
+                device_group=device_group,
+                repo_dir=repo_dir,
+                repo=repo,
+                service_files={"prebuilt-service": oci_tar},
+                platform="linux/amd64",
+                wait_for_deploy=True,
+            )
+
+            verify_manifest_containers_running(
+                docker_host, manifest_file, f"{repo_dir.name}-prebuilt"
+            )
