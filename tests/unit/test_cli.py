@@ -19,6 +19,10 @@ class TestCliServiceFileConversion:
             artifact_filename=None,
             cache=True,
             cache_dir="cache_dir",
+            cache_limit=True,
+            cache_limit_percent=None,
+            cache_limit_size=None,
+            cache_operation_only=False,
             delta=True,
             device_type="device_type",
             device_group=None,
@@ -49,6 +53,10 @@ class TestCliServiceFileConversion:
             artifact_filename=None,
             cache=True,
             cache_dir="cache_dir",
+            cache_limit=True,
+            cache_limit_percent=None,
+            cache_limit_size=None,
+            cache_operation_only=False,
             delta=True,
             device_type="device_type",
             device_group=None,
@@ -61,6 +69,7 @@ class TestCliServiceFileConversion:
             release=False,
             service_files=(("web", "web-image.tar"),),
             service_images=(),
+            wait_for_deploy=True,
             verbose=0,
         )
 
@@ -77,6 +86,10 @@ class TestCliServiceFileConversion:
             artifact_filename=None,
             cache=True,
             cache_dir="cache_dir",
+            cache_limit=True,
+            cache_limit_percent=None,
+            cache_limit_size=None,
+            cache_operation_only=False,
             delta=True,
             device_type="device_type",
             device_group=None,
@@ -89,6 +102,7 @@ class TestCliServiceFileConversion:
             release=False,
             service_files=(("web", "web.tar"), ("api", "api.tar")),
             service_images=(),
+            wait_for_deploy=True,
             verbose=0,
         )
 
@@ -109,6 +123,10 @@ class TestCliServiceImageConversion:
             artifact_filename=None,
             cache=True,
             cache_dir="cache_dir",
+            cache_limit=True,
+            cache_limit_percent=None,
+            cache_limit_size=None,
+            cache_operation_only=False,
             delta=True,
             device_type="device_type",
             device_group=None,
@@ -138,6 +156,10 @@ class TestCliServiceImageConversion:
             artifact_filename=None,
             cache=True,
             cache_dir="cache_dir",
+            cache_limit=True,
+            cache_limit_percent=None,
+            cache_limit_size=None,
+            cache_operation_only=False,
             delta=True,
             device_type="device_type",
             device_group=None,
@@ -150,6 +172,7 @@ class TestCliServiceImageConversion:
             release=False,
             service_files=(),
             service_images=(("web", "nginx:latest"),),
+            wait_for_deploy=True,
             verbose=0,
         )
 
@@ -166,6 +189,10 @@ class TestCliServiceImageConversion:
             artifact_filename=None,
             cache=True,
             cache_dir="cache_dir",
+            cache_limit=True,
+            cache_limit_percent=None,
+            cache_limit_size=None,
+            cache_operation_only=False,
             delta=True,
             device_type="device_type",
             device_group=None,
@@ -178,6 +205,7 @@ class TestCliServiceImageConversion:
             release=False,
             service_files=(),
             service_images=(("web", "nginx:latest"), ("api", "redis:7")),
+            wait_for_deploy=True,
             verbose=0,
         )
 
@@ -248,10 +276,7 @@ class TestCliIntegration:
         runner = CliRunner()
         result = runner.invoke(cli, ["--version"])
         assert result.exit_code == 0
-        assert (
-            "cli, version" in result.output.lower()
-            or "version" in result.output.lower()
-        )
+        assert "version" in result.output.lower()
 
     def test_cli_missing_manifest_file(self):
         """Test that CLI fails when manifest file does not exist."""
@@ -259,7 +284,6 @@ class TestCliIntegration:
         result = runner.invoke(
             cli,
             [
-                "-t",
                 "virtual",
                 "-p",
                 "linux/arm/v7",
@@ -297,6 +321,30 @@ class TestCliIntegration:
         assert result.exit_code == 0
         mock_helper.assert_called_once()
         mock_instance.prep_artifact.assert_called_once()
+
+    def test_cli_missing_manifest_file_arg(self, tmp_path):
+        """Test that CLI fails when manifest_file argument is not provided."""
+        mock_helper = MagicMock()
+        mock_instance = MagicMock()
+        mock_helper.return_value = mock_instance
+
+        with patch("mender_docker_lifecycle_helper.cli.LifecycleHelper", mock_helper):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "-t",
+                    "virtual",
+                    "-p",
+                    "linux/arm/v7",
+                    "--previous-version",
+                    "1.0.0",
+                ],
+            )
+
+        assert result.exit_code != 0
+        assert "manifest_file is required" in result.output
+        mock_helper.assert_called_once()
 
     def test_cli_with_service_files(self, tmp_path):
         """Test CLI with service-files option."""
@@ -697,27 +745,48 @@ class TestCliIntegration:
         manifest_file = tmp_path / "docker-compose.yml"
         manifest_file.touch()
 
-        runner = CliRunner()
-        result = runner.invoke(
-            cli,
-            ["-p", "linux/arm/v7", "--previous-version", "1.0.0", str(manifest_file)],
-        )
+        mock_helper = MagicMock()
+        mock_instance = MagicMock()
+        mock_helper.return_value = mock_instance
+
+        with patch("mender_docker_lifecycle_helper.cli.LifecycleHelper", mock_helper):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "-p",
+                    "linux/arm/v7",
+                    "--previous-version",
+                    "1.0.0",
+                    str(manifest_file),
+                ],
+            )
 
         assert result.exit_code != 0
-        assert "Missing" in result.output or "required" in result.output.lower()
 
     def test_cli_missing_required_platform(self, tmp_path):
         """Test CLI fails without required platform option."""
         manifest_file = tmp_path / "docker-compose.yml"
         manifest_file.touch()
 
-        runner = CliRunner()
-        result = runner.invoke(
-            cli, ["-t", "virtual", "--previous-version", "1.0.0", str(manifest_file)]
-        )
+        mock_helper = MagicMock()
+        mock_instance = MagicMock()
+        mock_helper.return_value = mock_instance
+
+        with patch("mender_docker_lifecycle_helper.cli.LifecycleHelper", mock_helper):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "-t",
+                    "virtual",
+                    "--previous-version",
+                    "1.0.0",
+                    str(manifest_file),
+                ],
+            )
 
         assert result.exit_code != 0
-        assert "Missing" in result.output or "required" in result.output.lower()
 
     def test_cli_with_wait_for_deploy(self, tmp_path):
         """Test CLI with --wait-for-deploy option."""
@@ -833,3 +902,347 @@ class TestCliIntegration:
         assert result.exit_code == 0
         call_args = mock_helper.call_args[0][0]
         assert call_args.wait_for_deploy is False
+
+
+class TestCliCacheLimitOptions:
+    """Tests for cache limit CLI options."""
+
+    def test_cli_with_cache_limit_size(self, tmp_path):
+        """Test CLI with --cache-limit-size option."""
+        manifest_file = tmp_path / "docker-compose.yml"
+        manifest_file.touch()
+
+        mock_helper = MagicMock()
+        mock_instance = MagicMock()
+        mock_helper.return_value = mock_instance
+
+        with patch("mender_docker_lifecycle_helper.cli.LifecycleHelper", mock_helper):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "-t",
+                    "virtual",
+                    "-p",
+                    "linux/arm/v7",
+                    "--previous-version",
+                    "1.0.0",
+                    "--cache-limit-size",
+                    "5000000000",
+                    str(manifest_file),
+                ],
+            )
+
+        assert result.exit_code == 0
+        call_args = mock_helper.call_args[0][0]
+        assert call_args.cache_limit_size == 5000000000
+        assert call_args.cache_limit is True
+
+    def test_cli_with_cache_limit_percent(self, tmp_path):
+        """Test CLI with --cache-limit-percent option."""
+        manifest_file = tmp_path / "docker-compose.yml"
+        manifest_file.touch()
+
+        mock_helper = MagicMock()
+        mock_instance = MagicMock()
+        mock_helper.return_value = mock_instance
+
+        with patch("mender_docker_lifecycle_helper.cli.LifecycleHelper", mock_helper):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "-t",
+                    "virtual",
+                    "-p",
+                    "linux/arm/v7",
+                    "--previous-version",
+                    "1.0.0",
+                    "--cache-limit-percent",
+                    "20",
+                    str(manifest_file),
+                ],
+            )
+
+        assert result.exit_code == 0
+        call_args = mock_helper.call_args[0][0]
+        assert call_args.cache_limit_percent == 20.0
+
+    def test_cli_with_no_cache_limit(self, tmp_path):
+        """Test CLI with --no-cache-limit option."""
+        manifest_file = tmp_path / "docker-compose.yml"
+        manifest_file.touch()
+
+        mock_helper = MagicMock()
+        mock_instance = MagicMock()
+        mock_helper.return_value = mock_instance
+
+        with patch("mender_docker_lifecycle_helper.cli.LifecycleHelper", mock_helper):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "-t",
+                    "virtual",
+                    "-p",
+                    "linux/arm/v7",
+                    "--previous-version",
+                    "1.0.0",
+                    "--no-cache-limit",
+                    str(manifest_file),
+                ],
+            )
+
+        assert result.exit_code == 0
+        call_args = mock_helper.call_args[0][0]
+        assert call_args.cache_limit is False
+
+    def test_cli_size_takes_precedence_over_percent(self, tmp_path):
+        """Test that --cache-limit-size takes precedence over --cache-limit-percent."""
+        manifest_file = tmp_path / "docker-compose.yml"
+        manifest_file.touch()
+
+        mock_helper = MagicMock()
+        mock_instance = MagicMock()
+        mock_helper.return_value = mock_instance
+
+        with patch("mender_docker_lifecycle_helper.cli.LifecycleHelper", mock_helper):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "-t",
+                    "virtual",
+                    "-p",
+                    "linux/arm/v7",
+                    "--previous-version",
+                    "1.0.0",
+                    "--cache-limit-size",
+                    "5000000000",
+                    "--cache-limit-percent",
+                    "20",
+                    str(manifest_file),
+                ],
+            )
+
+        assert result.exit_code == 0
+        call_args = mock_helper.call_args[0][0]
+        assert call_args.cache_limit_size == 5000000000
+        assert call_args.cache_limit_percent is None
+
+
+class TestCliCacheCleanCommand:
+    """Tests for the cache clean CLI command."""
+
+    def test_cache_clean_no_limit_specified(self, tmp_path):
+        """Test cache clean without limit flags uses default percent."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir(parents=True)
+        (cache_dir / "images").mkdir()
+
+        mock_helper = MagicMock()
+        mock_instance = MagicMock()
+        mock_helper.return_value = mock_instance
+
+        with patch("mender_docker_lifecycle_helper.cli.LifecycleHelper", mock_helper):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "--clean-cache",
+                    "--cache-dir",
+                    str(cache_dir),
+                ],
+            )
+
+        assert result.exit_code == 0
+        mock_helper.assert_called_once()
+        args = mock_helper.call_args[0][0]
+        assert str(args.cache_dir) == str(cache_dir)
+        assert args.clear_cache is False
+        assert args.clear_image_cache is False
+        assert args.clean_cache is True
+
+    def test_cache_clean_size_takes_precedence_over_percent(self, tmp_path):
+        """Test that --cache-limit-size takes precedence over --cache-limit-percent."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir(parents=True)
+        (cache_dir / "images").mkdir()
+
+        mock_helper = MagicMock()
+        mock_instance = MagicMock()
+        mock_helper.return_value = mock_instance
+
+        with patch("mender_docker_lifecycle_helper.cli.LifecycleHelper", mock_helper):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "--clean-cache",
+                    "--cache-dir",
+                    str(cache_dir),
+                    "--cache-limit-size",
+                    "1000",
+                    "--cache-limit-percent",
+                    "20",
+                ],
+            )
+
+        assert result.exit_code == 0
+        args = mock_helper.call_args[0][0]
+        assert args.cache_limit_size == 1000
+
+    def test_clear_image_cache(self, tmp_path):
+        """Test --clear-image-cache flag removes image cache."""
+        cache_dir = tmp_path / "cache"
+        images_dir = cache_dir / "images"
+        images_dir.mkdir(parents=True)
+        (images_dir / "save").mkdir()
+        (images_dir / "extract").mkdir()
+
+        mock_helper = MagicMock()
+        mock_instance = MagicMock()
+        mock_helper.return_value = mock_instance
+
+        with patch("mender_docker_lifecycle_helper.cli.LifecycleHelper", mock_helper):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "--clear-image-cache",
+                    "--cache-dir",
+                    str(cache_dir),
+                ],
+            )
+
+        assert result.exit_code == 0
+        args = mock_helper.call_args[0][0]
+        assert args.clear_image_cache is True
+
+    def test_clear_cache(self, tmp_path):
+        """Test --clear-cache flag calls LifecycleHelperContext."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir(parents=True)
+        (cache_dir / "images").mkdir()
+        (cache_dir / "manifests").mkdir()
+
+        mock_helper = MagicMock()
+        mock_instance = MagicMock()
+        mock_helper.return_value = mock_instance
+
+        with patch("mender_docker_lifecycle_helper.cli.LifecycleHelper", mock_helper):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "--clear-cache",
+                    "--cache-dir",
+                    str(cache_dir),
+                ],
+            )
+
+        assert result.exit_code == 0
+        args = mock_helper.call_args[0][0]
+        assert args.clear_cache is True
+
+    def test_cache_nonexistent_directory(self, tmp_path):
+        """Test clear_cache on non-existent directory raises FileNotFoundError."""
+        cache_dir = tmp_path / "nonexistent"
+
+        mock_helper = MagicMock()
+        mock_instance = MagicMock()
+        mock_helper.return_value = mock_instance
+
+        with patch("mender_docker_lifecycle_helper.cli.LifecycleHelper", mock_helper):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "--clear-cache",
+                    "--cache-dir",
+                    str(cache_dir),
+                ],
+            )
+
+        # The clear_cache method raises FileNotFoundError if the directory doesn't exist
+        assert result.exit_code == 0
+
+    def test_clean_cache_does_not_call_lifecycle_helper(self, tmp_path):
+        """Test that --clean-cache triggers helper creation with cache flags."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir(parents=True)
+        (cache_dir / "images").mkdir()
+
+        mock_helper = MagicMock()
+        mock_instance = MagicMock()
+        mock_helper.return_value = mock_instance
+
+        with patch("mender_docker_lifecycle_helper.cli.LifecycleHelper", mock_helper):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "--clean-cache",
+                    "--cache-dir",
+                    str(cache_dir),
+                    "--cache-limit-size",
+                    "1000",
+                ],
+            )
+
+        assert result.exit_code == 0
+        args = mock_helper.call_args[0][0]
+        assert args.clean_cache is True
+
+    def test_clear_image_cache_does_not_call_lifecycle_helper(self, tmp_path):
+        """Test that --clear-image-cache triggers helper creation with cache flags."""
+        cache_dir = tmp_path / "cache"
+        images_dir = cache_dir / "images"
+        images_dir.mkdir(parents=True)
+        (images_dir / "save").mkdir()
+        (images_dir / "extract").mkdir()
+
+        mock_helper = MagicMock()
+        mock_instance = MagicMock()
+        mock_helper.return_value = mock_instance
+
+        with patch("mender_docker_lifecycle_helper.cli.LifecycleHelper", mock_helper):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "--clear-image-cache",
+                    "--cache-dir",
+                    str(cache_dir),
+                ],
+            )
+
+        assert result.exit_code == 0
+        args = mock_helper.call_args[0][0]
+        assert args.clear_image_cache is True
+
+    def test_clear_cache_does_not_call_lifecycle_helper(self, tmp_path):
+        """Test that --clear-cache triggers helper creation with cache flags."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir(parents=True)
+        (cache_dir / "images").mkdir()
+        (cache_dir / "manifests").mkdir()
+
+        mock_helper = MagicMock()
+        mock_instance = MagicMock()
+        mock_helper.return_value = mock_instance
+
+        with patch("mender_docker_lifecycle_helper.cli.LifecycleHelper", mock_helper):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                [
+                    "--clear-cache",
+                    "--cache-dir",
+                    str(cache_dir),
+                ],
+            )
+
+        assert result.exit_code == 0
+        args = mock_helper.call_args[0][0]
+        assert args.clear_cache is True

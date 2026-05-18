@@ -6,7 +6,6 @@ import tempfile
 
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Optional
 
 import git
 import yaml
@@ -19,7 +18,21 @@ from mender_docker_lifecycle_helper.utils.container_utils import (
 )
 
 
-LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR"]
+LOG_COLORS = {
+    "DEBUG": "\033[1;34m",  # Blue
+    "INFO": "\033[1;32m",  # Green
+    "WARNING": "\033[1;33m",  # Yellow
+    "ERROR": "\033[1;31m",  # Red
+    "CRITICAL": "\033[1;41m",  # Red on background
+}
+LOG_LEVELS = list(LOG_COLORS.keys())
+
+
+# Adapted from https://sqlpey.com/python/solved-how-to-add-color-to-python-logging-output/
+class ColorLogFormatter(logging.Formatter):
+    def format(self, record):
+        color = LOG_COLORS.get(record.levelname, "\033[0m")
+        return f"{color}{super().format(record)}\033[0m"
 
 
 class LifecycleHelperContext:
@@ -35,6 +48,9 @@ class LifecycleHelperContext:
         """
         self.artifact_filename = args.artifact_filename
         self.cache = args.cache
+        self.cache_limit = args.cache_limit
+        self.cache_limit_percent = args.cache_limit_percent
+        self.cache_limit_size = args.cache_limit_size
         self.delta = args.delta
         self.device_type = args.device_type
         self.device_group = args.device_group
@@ -47,6 +63,38 @@ class LifecycleHelperContext:
         self.wait_for_deploy = args.wait_for_deploy
 
         self.logger = self._prep_logger(args.log_level)
+
+        if args.cache_operation_only:
+            self.cache_dir = self._prep_cache_dir(args.cache_dir)
+            self.image_cache = ImageCache(
+                self.cache_dir / "images", platform=self.platform, logger=self.logger
+            )
+
+            if args.clear_cache:
+                self.clear_cache()
+
+            if args.clear_image_cache:
+                self.clear_image_cache()
+
+            if args.clean_cache:
+                if args.cache_limit_size is None and args.cache_limit_percent is None:
+                    self.logger.error(
+                        "No cleanup limit specified. Use --cache-limit-size or --cache-limit-percent."
+                    )
+                    return
+
+                bytes_freed = self.clean_cache(
+                    args.cache_limit_size, args.cache_limit_percent
+                )
+                freed = float(bytes_freed)
+                base = 1000
+                units = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"]
+                idx = 0
+                while freed >= base and idx < len(units) - 1:
+                    freed /= base
+                    idx += 1
+                self.logger.info(f"Cache cleanup freed {freed:.{2}f} {units[idx]}.")
+            return
 
         self.manifest_file = args.manifest_file.resolve()
 
@@ -74,7 +122,9 @@ class LifecycleHelperContext:
             self.cache_dir = Path(
                 self.repo_root_dir / ".mender-docker-lifecycle-helper"
             )
-        self.image_cache = ImageCache(self.cache_dir / "images")
+        self.image_cache = ImageCache(
+            self.cache_dir / "images", platform=self.platform, logger=self.logger
+        )
         self.temp_dir = self.cache_dir / "temp"
         self.temp_dir.mkdir(parents=True)
 
@@ -122,8 +172,9 @@ class LifecycleHelperContext:
         """
         logger = logging.getLogger(__name__)
         handler = logging.StreamHandler()
-        formatter = logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s")
-        handler.setFormatter(formatter)
+        handler.setFormatter(
+            ColorLogFormatter("[%(asctime)s] %(levelname)s: %(message)s")
+        )
         logger.addHandler(handler)
         logger.setLevel(getattr(logging, log_level))
         return logger
@@ -169,6 +220,40 @@ class LifecycleHelperContext:
             cache_dir.mkdir(parents=True)
         return cache_dir
 
+    def clean_cache(
+        self, limit_size_bytes: int | None, disk_percent: float | None
+    ) -> int:
+        """
+        Clean the image cache based on size or disk percent limits.
+
+        :param limit_size_bytes: Maximum cache size in bytes.
+        :param disk_percent: Minimum percent of total disk that should remain free.
+        :return: Number of bytes freed.
+        """
+        return self.image_cache.cleanup_by_mtime(
+            limit_size_bytes=limit_size_bytes,
+            disk_percent=disk_percent,
+        )
+
+    def clear_image_cache(self) -> None:
+        """
+        Remove the image cache contents (save, extract, delta).
+
+        :raises FileNotFoundError: If the image cache does not exist.
+        """
+        shutil.rmtree(self.image_cache.cache_dir)
+
+    def clear_cache(self) -> None:
+        """
+        Remove the entire cache directory.
+
+        :raises FileNotFoundError: If the cache directory does not exist.
+        """
+        if self.cache_dir.exists():
+            shutil.rmtree(self.cache_dir)
+        else:
+            raise FileNotFoundError(f"Cache directory does not exist: {self.cache_dir}")
+
     def _temp_repo_at_version(
         self,
         version: str,
@@ -208,21 +293,25 @@ class LifecycleHelperContext:
 
         :param compose_file: The path to the Compose YAML file to read.
         :return: The normalized compose content as a dict with all directives resolved.
-        :raises subprocess.CalledProcessError: If docker compose config fails.
+        :raises RuntimeError: If docker compose config fails.
         :raises yaml.YAMLError: If the output cannot be parsed as YAML.
         """
-        result = subprocess.run(
-            [
-                DOCKER_BIN,
-                "compose",
-                "--file",
-                str(compose_file),
-                "config",
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+        try:
+            result = subprocess.run(
+                [
+                    DOCKER_BIN,
+                    "compose",
+                    "--file",
+                    str(compose_file),
+                    "config",
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        except subprocess.CalledProcessError as e:
+            error_msg = f"Failed to read compose file {compose_file}: {e.stderr}"
+            raise RuntimeError(error_msg) from e
         return yaml.safe_load(result.stdout)
 
     def _artifact_services_metadata_from_compose(
@@ -256,7 +345,7 @@ class LifecycleHelperContext:
 
     def _prep_previous_artifact_metadata(
         self,
-        previous_version: Optional[str],
+        previous_version: str | None,
     ) -> ArtifactMetadata:
         """
         Determine the metadata of the previous artifact. If the cache is enabled and includes a metadata file from a previous helper execution, that data is used. If a previous version is specified, the metadata is extracted from the artifact compose manifest file at that version of the repository. If the execution is for a release, the metadata is extracted from the artifact compose manifest file at the previous (mainline) commit of the repo. Otherwise, the metadata is extracted from the artifact compose manifest file at the version of the repository as specified by the current repo version (as read from the version file).

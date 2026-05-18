@@ -1,3 +1,5 @@
+import shutil
+import threading
 import uuid
 
 from pathlib import Path
@@ -9,6 +11,7 @@ from mender_docker_lifecycle_helper.utils.mender_server import (
     upload_artifact,
     wait_for_deployment,
 )
+from mender_docker_lifecycle_helper.utils.image_cache import ImageCache
 from mender_docker_lifecycle_helper.artifact_metadata import ArtifactMetadata
 from mender_docker_lifecycle_helper.context import LifecycleHelperContext
 from mender_docker_lifecycle_helper.artifact import LifecycleHelperArtifact
@@ -79,7 +82,6 @@ class LifecycleHelper:
         deployment_id = None
         if "Location" in response.headers:
             location = response.headers["Location"]
-            # Location header format: /deployments/v1/deployments/{deploymentId}
             deployment_id = location.rstrip("/").split("/")[-1]
             self.context.logger.debug(
                 f"Got deployment ID from Location header: {deployment_id}"
@@ -136,6 +138,28 @@ class LifecycleHelper:
         artifact = self.create_artifact(artifact_metadata)
         upload_artifact(self.context, artifact)
 
+        # Start cache cleanup in parallel if limits are configured
+        cleanup_thread = None
+        cleanup_bytes_freed = [0]
+
+        if self.context.cache_limit and (
+            self.context.cache_limit_size is not None
+            or self.context.cache_limit_percent is not None
+        ):
+            self.context.logger.warning(
+                "Cache limit exceeded, starting cache cleanup in background..."
+            )
+
+            def run_cleanup():
+                bytes_freed = self.context.image_cache.cleanup_by_mtime(
+                    limit_size_bytes=self.context.cache_limit_size,
+                    disk_percent=self.context.cache_limit_percent,
+                )
+                cleanup_bytes_freed[0] = bytes_freed
+
+            cleanup_thread = threading.Thread(target=run_cleanup, daemon=False)
+            cleanup_thread.start()
+
         if self.context.device_group is not None:
             deployment_id = self.deploy_artifact(artifact)
 
@@ -159,6 +183,13 @@ class LifecycleHelper:
         else:
             self.context.logger.debug(
                 "No device group set; skipping deployment creation."
+            )
+
+        # Wait for cleanup thread to complete
+        if cleanup_thread is not None:
+            cleanup_thread.join()
+            self.context.logger.info(
+                f"Cache cleanup freed {cleanup_bytes_freed[0]} bytes."
             )
 
         self.context.logger.info(f"Artifact {artifact.name} successfully processed!")

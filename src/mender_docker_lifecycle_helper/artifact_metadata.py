@@ -1,12 +1,11 @@
 import json
 
 from pathlib import Path
-from typing import Optional
 
 
 class ArtifactMetadata:
     def __init__(
-        self, version: str, services: Optional[dict[str, dict[str, dict[str, str]]]]
+        self, version: str, services: dict[str, dict[str, dict[str, str]]] | None
     ):
         """
         Construct an ArtifactMetadata object.

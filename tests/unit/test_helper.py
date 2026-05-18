@@ -34,6 +34,10 @@ def mock_context():
             "/tmp/test/cache/manifests/test-manifest/previous_artifact.json"
         ),
         cache=False,
+        cache_limit=True,
+        cache_limit_size=None,
+        cache_limit_percent=None,
+        cache_operation_only=False,
         wait_for_deploy=False,
     )
 
@@ -56,6 +60,10 @@ class TestLifecycleHelperInit:
             artifact_filename=None,
             cache=False,
             cache_dir=None,
+            cache_limit=True,
+            cache_limit_size=None,
+            cache_limit_percent=None,
+            cache_operation_only=False,
             delta=False,
             device_type="virtual",
             device_group=None,
@@ -68,6 +76,7 @@ class TestLifecycleHelperInit:
             release=False,
             service_files=None,
             service_images=None,
+            wait_for_deploy=True,
         )
 
         with patch(
@@ -708,3 +717,171 @@ class TestPrepArtifactWithWaitForDeploy:
                                     mock_to_file.assert_called_once_with(
                                         mock_context.cache_artifact_metadata_file
                                     )
+
+
+class TestPrepArtifactWithCacheLimit:
+    """Tests for prep_artifact with cache_limit flag."""
+
+    def test_prep_artifact_with_cache_limit_size(self, mock_context):
+        """Test prep_artifact triggers cache cleanup when cache_limit_size is set."""
+        mock_context.release = True
+        mock_context.repo_version = "1.0.0"
+        mock_context.device_group = "test-group"
+        mock_context.logger = MagicMock()
+        mock_context.cache = True
+        mock_context.cache_limit = True
+        mock_context.cache_limit_size = 1000000
+        mock_context.cache_limit_percent = None
+        mock_context.image_cache = MagicMock()
+        mock_context.image_cache.cleanup_by_mtime.return_value = 500000
+
+        helper = LifecycleHelper.__new__(LifecycleHelper)
+        helper.context = mock_context
+
+        with patch(
+            "mender_docker_lifecycle_helper.helper.LifecycleHelperArtifact"
+        ) as mock_artifact_class:
+            mock_artifact = MagicMock()
+            mock_artifact.name = "test-manifest-1.0.0"
+            mock_artifact_class.return_value = mock_artifact
+
+            with patch.object(helper, "create_artifact") as mock_create:
+                mock_create.return_value = mock_artifact
+                with patch(
+                    "mender_docker_lifecycle_helper.helper.upload_artifact"
+                ) as mock_upload:
+                    with patch.object(helper, "deploy_artifact") as mock_deploy:
+                        mock_deploy.return_value = "deploy-12345"
+                        with patch(
+                            "mender_docker_lifecycle_helper.helper.ArtifactMetadata"
+                        ) as mock_metadata_class:
+                            mock_metadata = MagicMock()
+                            mock_metadata_class.return_value = mock_metadata
+                            mock_metadata.to_dict.return_value = {
+                                "version": "1.0.0",
+                                "services": {},
+                            }
+
+                            with patch.object(
+                                mock_artifact_class,
+                                "gen_artifact_services",
+                                return_value={
+                                    "server": {"image": {"ref": "test", "hash": "123"}}
+                                },
+                            ):
+                                with patch.object(
+                                    mock_metadata, "to_file"
+                                ) as mock_to_file:
+                                    helper.prep_artifact()
+
+                                    mock_context.image_cache.cleanup_by_mtime.assert_called_once_with(
+                                        limit_size_bytes=1000000, disk_percent=None
+                                    )
+                                    mock_context.logger.warning.assert_any_call(
+                                        "Cache limit exceeded, starting cache cleanup in background..."
+                                    )
+                                    mock_context.logger.info.assert_any_call(
+                                        "Cache cleanup freed 500000 bytes."
+                                    )
+
+    def test_prep_artifact_with_cache_limit_percent(self, mock_context):
+        """Test prep_artifact triggers cache cleanup when cache_limit_percent is set."""
+        mock_context.release = True
+        mock_context.repo_version = "1.0.0"
+        mock_context.device_group = None
+        mock_context.logger = MagicMock()
+        mock_context.cache = True
+        mock_context.cache_limit = True
+        mock_context.cache_limit_size = None
+        mock_context.cache_limit_percent = 80.0
+        mock_context.image_cache = MagicMock()
+        mock_context.image_cache.cleanup_by_mtime.return_value = 250000
+
+        helper = LifecycleHelper.__new__(LifecycleHelper)
+        helper.context = mock_context
+
+        with patch(
+            "mender_docker_lifecycle_helper.helper.LifecycleHelperArtifact"
+        ) as mock_artifact_class:
+            mock_artifact = MagicMock()
+            mock_artifact.name = "test-manifest-1.0.0"
+            mock_artifact_class.return_value = mock_artifact
+
+            with patch.object(helper, "create_artifact") as mock_create:
+                mock_create.return_value = mock_artifact
+                with patch(
+                    "mender_docker_lifecycle_helper.helper.upload_artifact"
+                ) as mock_upload:
+                    with patch(
+                        "mender_docker_lifecycle_helper.helper.ArtifactMetadata"
+                    ) as mock_metadata_class:
+                        mock_metadata = MagicMock()
+                        mock_metadata_class.return_value = mock_metadata
+                        mock_metadata.to_dict.return_value = {
+                            "version": "1.0.0",
+                            "services": {},
+                        }
+
+                        with patch.object(
+                            mock_artifact_class,
+                            "gen_artifact_services",
+                            return_value={
+                                "server": {"image": {"ref": "test", "hash": "123"}}
+                            },
+                        ):
+                            helper.prep_artifact()
+
+                            mock_context.image_cache.cleanup_by_mtime.assert_called_once_with(
+                                limit_size_bytes=None, disk_percent=80.0
+                            )
+
+    def test_prep_artifact_no_cache_limit_when_disabled(self, mock_context):
+        """Test prep_artifact does not trigger cleanup when cache_limit is False."""
+        mock_context.release = True
+        mock_context.repo_version = "1.0.0"
+        mock_context.device_group = None
+        mock_context.logger = MagicMock()
+        mock_context.cache = True
+        mock_context.cache_limit = False
+        mock_context.cache_limit_size = 1000000
+        mock_context.cache_limit_percent = 80.0
+
+        helper = LifecycleHelper.__new__(LifecycleHelper)
+        helper.context = mock_context
+
+        with patch(
+            "mender_docker_lifecycle_helper.helper.LifecycleHelperArtifact"
+        ) as mock_artifact_class:
+            mock_artifact = MagicMock()
+            mock_artifact.name = "test-manifest-1.0.0"
+            mock_artifact_class.return_value = mock_artifact
+
+            with patch.object(helper, "create_artifact") as mock_create:
+                mock_create.return_value = mock_artifact
+                with patch(
+                    "mender_docker_lifecycle_helper.helper.upload_artifact"
+                ) as mock_upload:
+                    with patch(
+                        "mender_docker_lifecycle_helper.helper.ArtifactMetadata"
+                    ) as mock_metadata_class:
+                        mock_metadata = MagicMock()
+                        mock_metadata_class.return_value = mock_metadata
+                        mock_metadata.to_dict.return_value = {
+                            "version": "1.0.0",
+                            "services": {},
+                        }
+
+                        with patch.object(
+                            mock_artifact_class,
+                            "gen_artifact_services",
+                            return_value={
+                                "server": {"image": {"ref": "test", "hash": "123"}}
+                            },
+                        ):
+                            helper.prep_artifact()
+
+                            # No warning should be logged about cache limit exceeded
+                            assert not any(
+                                "Cache limit exceeded" in str(call)
+                                for call in mock_context.logger.warning.call_args_list
+                            )
