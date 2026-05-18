@@ -22,20 +22,23 @@ release deployment processes.
     - [mender-docker-lifecycle-helper-launcher usage](#mender-docker-lifecycle-helper-launcher-usage)
   - [mender-docker-lifecycle-helper-setup](#mender-docker-lifecycle-helper-setup)
     - [mender-docker-lifecycle-helper-setup usage](#mender-docker-lifecycle-helper-setup-usage)
-  - [mender-docker-lifecycle-helper container](#mender-docker-lifecycle-helper-container)
-    - [mender-docker-lifecycle-helper container usage](#mender-docker-lifecycle-helper-container-usage)
-  - [mender-docker-lifecycle-helper core](#mender-docker-lifecycle-helper-core)
-    - [mender-docker-lifecycle-helper core usage](#mender-docker-lifecycle-helper-core-usage)
-      - [mender-docker-lifecycle-helper inputs](#mender-docker-lifecycle-helper-inputs)
-      - [mender-docker-lifecycle-helper outputs](#mender-docker-lifecycle-helper-outputs)
-      - [mender-docker-lifecycle-helper understanding delta artifacts](#mender-docker-lifecycle-helper-understanding-delta-artifacts)
-      - [mender-docker-lifecycle-helper - mender-artifact contexts](#mender-docker-lifecycle-helper---mender-artifact-contexts)
-        - [mender-artifact previous version conditions](#mender-artifact-previous-version-conditions)
+  - [Container](#container)
+    - [Container usage](#container-usage)
+  - [Core](#core)
+    - [Core usage](#core-usage)
+      - [Inputs](#inputs)
+      - [Outputs](#outputs)
+      - [Understanding delta artifacts](#understanding-delta-artifacts)
+      - [mender-artifact contexts](#mender-artifact-contexts)
+        - [Previous version conditions](#previous-version-conditions)
         - [mender-artifact delta artifact conditions](#mender-artifact-delta-artifact-conditions)
+      - [Cache cleaning](#cache-cleaning)
+        - [Automatic cleanup](#automatic-cleanup)
+        - [Manual cleanup commands](#manual-cleanup-commands)
       - [Alternative installation via PyPi](#alternative-installation-via-pypi)
-  - [mender-docker-lifecycle-helper GitHub Actions workflow](#mender-docker-lifecycle-helper-github-actions-workflow)
-    - [mender-docker-lifecycle-helper GitHub Actions workflow usage](#mender-docker-lifecycle-helper-github-actions-workflow-usage)
-      - [mender-docker-lifecycle-helper GitHub Actions workflow inputs](#mender-docker-lifecycle-helper-github-actions-workflow-inputs)
+  - [GitHub Actions workflow](#github-actions-workflow)
+    - [Workflow usage](#workflow-usage)
+      - [Workflow inputs](#workflow-inputs)
   - [Contributing](#contributing)
     - [devcontainer](#devcontainer)
       - [devcontainer basic usage](#devcontainer-basic-usage)
@@ -83,13 +86,13 @@ image, as this automates establishment of the required conditions, namely that r
 bump of the `VERSION` file in the repo root as a commit to `main`, from which the tag is created.
 Also expected is that an artifact is published with version specified as the contents of `VERSION`
 file, on the commits that bump that version. It is recommended to automate this using the
-[reusable workflow from this repo](#mender-docker-lifecycle-helper-github-actions-workflow).
+[reusable workflow from this repo](#github-actions-workflow).
 
 ## mender-docker-lifecycle-helper-launcher<a name="mender-docker-lifecycle-helper-launcher"></a>
 
 The mender-docker-lifecycle-helper-launcher script is a convenience wrapper around the
-[containerized tool](#mender-docker-lifecycle-helper-container) for the appropriate volume mounts
-and run options. It may be used directly from this repo using `wget`:
+[containerized tool](#container) for the appropriate volume mounts and run options. It may be used
+directly from this repo using `wget`:
 
 ### mender-docker-lifecycle-helper-launcher usage<a name="mender-docker-lifecycle-helper-launcher-usage"></a>
 
@@ -127,15 +130,15 @@ Add the following to ~/.zshrc to complete setup:
 export PATH=/your/download/path:$PATH
 ```
 
-## mender-docker-lifecycle-helper container<a name="mender-docker-lifecycle-helper-container"></a>
+## Container<a name="container"></a>
 
-The mender-docker-lifecycle-helper tool is released as a Docker image under this repo. It may be
-launched directly as a container, as opposed to likewise via
-[the launcher](#mender-docker-lifecycle-helper-launcher), for greater control.
+The tool is released as a Docker image under this repo. It may be launched directly as a container,
+as opposed to likewise via [the launcher](#mender-docker-lifecycle-helper-launcher), for greater
+control.
 
-### mender-docker-lifecycle-helper container usage<a name="mender-docker-lifecycle-helper-container-usage"></a>
+### Container usage<a name="container-usage"></a>
 
-To launch a mender-docker-lifecycle-helper container, run:
+To launch the tool as a container, run:
 
 ```bash
 docker run \
@@ -152,26 +155,26 @@ docker run \
 	--help
 ```
 
-## mender-docker-lifecycle-helper core<a name="mender-docker-lifecycle-helper-core"></a>
+## Core<a name="core"></a>
 
-The core implementation of the mender-docker-lifecycle-helper tool is a Python CLI script that wraps
+The core implementation of the tool is a Python CLI script that wraps
 [Mender's mender-artifact tool](https://github.com/mendersoftware/mender-artifact) and requests to
 the [Mender Server Management API](https://docs.mender.io/api/?python#management-apis). For details
 of the context provided to mender-artifact, see
-[mender-docker-lifecycle-helper - mender-artifact contexts](#mender-docker-lifecycle-helper---mender-artifact-contexts).
+[mender-artifact contexts](#mender-artifact-contexts).
 
-### mender-docker-lifecycle-helper core usage<a name="mender-docker-lifecycle-helper-core-usage"></a>
+### Core usage<a name="core-usage"></a>
 
-To execute the core script directly, run the following from an environment in which the package is
+To execute the tool directly, run the following from an environment in which the package is
 installed:
 
 ```bash
 mender-docker-lifecycle-helper --help
 ```
 
-#### mender-docker-lifecycle-helper inputs<a name="mender-docker-lifecycle-helper-inputs"></a>
+#### Inputs<a name="inputs"></a>
 
-The environment variable inputs to the mender-docker-lifecycle-helper tool are as follows:
+The environment variable inputs to the tool are as follows:
 
 | Variable                  | Default                                                                                         | Effect                                                                                                                                                                                   |
 | ------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -185,6 +188,12 @@ The CLI flag inputs are as follows:
 | --------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-a`, `--artifact-filename` | `None`                                                                                                        | Name of the artifact file to create. Default: `<manifest-name>-<previous-version>+<current repo commit SHA>+<UUID>.mender`                                                                   |
 | `--cache-dir`               | `${XDG_CACHE_HOME}/mender-docker-lifecycle-helper` if defined, else `~/.cache/mender-docker-lifecycle-helper` | The cache dir to which the metadata for the previously uploaded artifact is saved. Overrides the MENDER_HELPER_CACHE_DIR variable.                                                           |
+| `--cache-limit`             | `True`                                                                                                        | Enable automatic cache cleanup when size limits are exceeded.                                                                                                                                |
+| `--cache-limit-percent`     | `20.0`                                                                                                        | Minimum percent of total disk that should remain free. Takes effect only when `--cache-limit-size` is not set.                                                                               |
+| `--cache-limit-size`        | `None`                                                                                                        | Maximum cache size in bytes. When exceeded, oldest items are removed. Takes precedence over `--cache-limit-percent`.                                                                         |
+| `--clean-cache`             | `False`                                                                                                       | ONLY clean the cache directory (based on `--cache-limit-size` or `--cache-limit-percent`); do not perform any artifact operations.                                                           |
+| `--clear-cache`             | `False`                                                                                                       | Remove the entire cache directory; do not perform any artifact operations.                                                                                                                   |
+| `--clear-image-cache`       | `False`                                                                                                       | Remove all image cache contents (save, extract, delta); do not perform any artifact operations.                                                                                              |
 | `--no-cache`                | `False`                                                                                                       | Skip reading previous artifact info from cache and always read from the repo at the previous version.                                                                                        |
 | `--delta`                   | `True`                                                                                                        | Generate the artifact as an update artifact, if applicable.                                                                                                                                  |
 | `--device-type`             | N/A                                                                                                           | Device type for the artifact (required).                                                                                                                                                     |
@@ -204,7 +213,7 @@ The CLI flag inputs are as follows:
 Additionally, the `--version` flag is available to display the tool version, and `--help` to display
 usage.
 
-#### mender-docker-lifecycle-helper outputs<a name="mender-docker-lifecycle-helper-outputs"></a>
+#### Outputs<a name="outputs"></a>
 
 The outputs of the tool are inferred from the execution context, with the intention of producing the
 optimal artifact for that context. To that purpose, the version and depends for each artifact are
@@ -228,7 +237,7 @@ Conditional attributes:
 In this way, each artifact is generated as a delta relative to the most recent artifact known to
 relate to the current context.
 
-#### mender-docker-lifecycle-helper understanding delta artifacts<a name="mender-docker-lifecycle-helper-understanding-delta-artifacts"></a>
+#### Understanding delta artifacts<a name="understanding-delta-artifacts"></a>
 
 When the `--delta` flag is set to false, all images from the manifest are included in full in the
 artifact, and the artifact is configured to have no dependency on another artifact.
@@ -242,15 +251,14 @@ such metadata is not available, then an image is included in the artifact if its
 differs from that of the image per the manifest as of the repo version in the `VERSION` file (or the
 `--previous-version` arg, if provided).
 
-#### mender-docker-lifecycle-helper - mender-artifact contexts<a name="mender-docker-lifecycle-helper---mender-artifact-contexts"></a>
+#### mender-artifact contexts<a name="mender-artifact-contexts"></a>
 
 The context (args and files) provided to the mender-artifact call is computed from several inputs to
-the mender-docker-lifecycle-helper invocation. These include the CLI options and environment
-variables (see [inputs](#mender-docker-lifecycle-helper-inputs)), as well as local files, including
-cache from previous executions of the tool and the repo `VERSION` file. This mapping is the core
-logic of the tool.
+the tool invocation. These include the CLI options and environment variables (see
+[Inputs](#inputs)), as well as local files, including cache from previous executions of the tool and
+the repo `VERSION` file. This mapping is the core logic of the tool.
 
-##### mender-artifact previous version conditions<a name="mender-artifact-previous-version-conditions"></a>
+##### Previous version conditions<a name="previous-version-conditions"></a>
 
 The previous version of the artifact (used for delta artifact generation, see
 [mender-artifact delta artifact conditions](#mender-artifact-delta-artifact-conditions)) is
@@ -276,6 +284,25 @@ table:
 | The image hash in each `<images>/sums-current.txt` belongs to the services defined in this version of the Compose file | Latest cache state (same as current repo state)                                       | Latest cache state                                                                    | Repo state at [previous version](#mender-artifact-previous-version-conditions)        |
 | The image ref in each `<images>/url-current.txt` belongs to the services defined in this version of the Compose file   | Latest cache state (same as current repo state)                                       | Latest cache state                                                                    | Repo state at [previous version](#mender-artifact-previous-version-conditions)        |
 | `--depends rootfs-image.<repo name><manifest name>.version:` version ID                                                | Cache previous artifact version ID                                                    | Cache previous artifact version ID                                                    | [Previous version](#mender-artifact-previous-version-conditions)                      |
+
+#### Cache cleaning<a name="cache-cleaning"></a>
+
+The tool provides automatic and manual cache cleanup to manage disk space usage. Cache cleanup can
+be triggered automatically after artifact operations or manually via dedicated flags.
+
+##### Automatic cleanup<a name="automatic-cleanup"></a>
+
+When `--cache-limit` is enabled (default), cleanup runs automatically after artifact
+creation/upload/deployment if cache limits are exceeded. Items are sorted by access time and the
+oldest are removed until the cleanup target is met.
+
+##### Manual cleanup commands<a name="manual-cleanup-commands"></a>
+
+| Command               | Effect                                                                                                            |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `--clean-cache`       | Clean cache by removing oldest items based on configured limits (`--cache-limit-size` or `--cache-limit-percent`) |
+| `--clear-image-cache` | Remove all image cache contents (save, extract, delta directories) without affecting manifests or temp            |
+| `--clear-cache`       | Remove the entire cache directory including manifests and temp                                                    |
 
 #### Alternative installation via PyPi<a name="alternative-installation-via-pypi"></a>
 
@@ -316,13 +343,12 @@ Additionally, the following configuration must be present in `/etc/containers/po
 }
 ```
 
-## mender-docker-lifecycle-helper GitHub Actions workflow<a name="mender-docker-lifecycle-helper-github-actions-workflow"></a>
+## GitHub Actions workflow<a name="github-actions-workflow"></a>
 
-This repo provides a GitHub Actions reusable workflow to apply the
-[containerized tool](#mender-docker-lifecycle-helper-container) via CI. It expects semantic
-versioning via a `VERSION` file and Git tags, per the
+This repo provides a GitHub Actions reusable workflow to apply the [containerized tool](#container)
+via CI. It expects semantic versioning via a `VERSION` file and Git tags, per the
 [release-it-gh-workflow](#https://github.com/rcwbr/release-it-gh-workflow) process, which informs
-its use of [the `--release` arg](#mender-docker-lifecycle-helper-inputs).
+its use of [the `--release` arg](#inputs).
 
 It generates and (optionally) deploys Mender artifacts of the specified target. The artifact is
 generated as `--release=false` and `--delta=true`, unless the ref for the workflow is a tag, in
@@ -330,7 +356,7 @@ which case one artifact is generated with `--release=true --delta=true` and one 
 `--release=true --delta=false`. In this way, each release introduces a new baseline artifact that
 devices may install from scratch, but iterations on branches are fast and lightweight.
 
-### mender-docker-lifecycle-helper GitHub Actions workflow usage<a name="mender-docker-lifecycle-helper-github-actions-workflow-usage"></a>
+### Workflow usage<a name="workflow-usage"></a>
 
 To upload artifacts and trigger deployments on Mender Server, the workflow must be provided with a
 [Mender Personal Access Token](https://docs.mender.io/server-integration/using-the-apis#personal-access-tokens)
@@ -423,7 +449,7 @@ jobs:
       service-files: '["web /path/to/web-image.tar", "api /path/to/api-image.tar"]'
 ```
 
-#### mender-docker-lifecycle-helper GitHub Actions workflow inputs<a name="mender-docker-lifecycle-helper-github-actions-workflow-inputs"></a>
+#### Workflow inputs<a name="workflow-inputs"></a>
 
 The full inputs for the workflow are as follows:
 
@@ -436,6 +462,7 @@ The full inputs for the workflow are as follows:
 | `platform`                  | ✓        | N/A                                                    | string | Platform with which the artifact is compatible (e.g., linux/arm/v7).                                                                 |
 | `service-files`             | ✗        | `''`                                                   | string | Image file overrides for services in the manifest_file, as a JSON array \["<service> <image file>", "<service> <image file>", ...\]. |
 | `service-images`            | ✗        | `''`                                                   | string | Image name overrides for services in the manifest_file, as a JSON array \["<service> <image>", "<service> <image>", ...\].           |
+| `wait-for-deploy`           | ✗        | `false`                                                | bool   | Wait for the deployment to finish before completing the workflow. When `false`, the workflow completes after artifact upload.        |
 | `helper-image`              | ✗        | `'ghcr.io/rcwbr/mender-docker-lifecycle-helper:1.4.0'` | string | Docker image to use as mender-docker-lifecycle-helper.                                                                               |
 | `secrets.mender-pat-secret` | ✓        | N/A                                                    | secret | Secret that contains the Mender server Personal Access Token to use for artifact upload and deployment.                              |
 
