@@ -40,7 +40,7 @@ on:
         type: boolean
       helper-image:
         description: Docker image to use as mender-docker-lifecycle-helper.
-        default: 'ghcr.io/rcwbr/mender-docker-lifecycle-helper:1.4.0'
+        default: 'ghcr.io/rcwbr/mender-docker-lifecycle-helper:1.4.1'
         required: false
         type: string
     secrets:
