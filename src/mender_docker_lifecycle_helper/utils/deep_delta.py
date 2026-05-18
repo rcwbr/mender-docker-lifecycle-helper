@@ -166,6 +166,46 @@ def oci_deep_delta(
         with open(source_path, "w") as f:
             f.write(str(source_relative_path))
 
+    # Handle any extra layers in the new image that have no corresponding layer in the old image.
+    # Create a "full layer diff" using /dev/null as source.
+    for i in range(len(from_layers), len(to_layers)):
+        logger.debug(
+            f"Copying extra layer {i + 1} of {len(to_layers) - len(from_layers)}"
+        )
+        to_layer_path = to_layers[i]
+        to_layer = to_layer_path.name
+        delta_layer_path = delta_gen_dir / "blobs" / HASH_PREFIX / to_layer
+        vcdiff_layer_path = (
+            delta_gen_dir / "blobs" / HASH_PREFIX / (to_layer + ".vcdiff")
+        )
+        source_path = delta_gen_dir / "blobs" / HASH_PREFIX / (to_layer + ".source")
+
+        # Create a vcdiff that produces the full layer when applied to /dev/null.
+        # This works because xdelta3 -e -s /dev/null <layer> creates a delta
+        # that reconstructs the layer content when applied to empty.
+        try:
+            result = subprocess.run(
+                [*delta_cmd, Path("/dev/null"), to_layer_path, vcdiff_layer_path],
+                capture_output=True,
+                check=True,
+            )
+            if result.returncode != 0:
+                raise subprocess.SubprocessError(result.stdout, result.stderr)
+        except subprocess.CalledProcessError as e:
+            stderr_str = (
+                e.stderr.decode("utf-8", errors="ignore")
+                if isinstance(e.stderr, bytes)
+                else e.stderr
+            )
+            raise subprocess.SubprocessError(stderr_str)
+
+        # Point to /dev/null as the source - apply_layer_delta_oci will use this path
+        with open(source_path, "w") as f:
+            f.write("/dev/null")
+
+        # Remove the original layer blob - it will be reconstructed from the vcdiff
+        delta_layer_path.unlink()
+
     delta_file = delta_dir / delta_filename
     logger.debug(f"Layer diffing complete, creating delta file {delta_file}...")
     with tarfile.open(delta_file, "w") as tar:
