@@ -32,6 +32,9 @@ release deployment processes.
       - [mender-docker-lifecycle-helper - mender-artifact contexts](#mender-docker-lifecycle-helper---mender-artifact-contexts)
         - [mender-artifact previous version conditions](#mender-artifact-previous-version-conditions)
         - [mender-artifact delta artifact conditions](#mender-artifact-delta-artifact-conditions)
+      - [mender-docker-lifecycle-helper cache cleaning](#mender-docker-lifecycle-helper-cache-cleaning)
+        - [Automatic cleanup](#automatic-cleanup)
+        - [Manual cleanup commands](#manual-cleanup-commands)
       - [Alternative installation via PyPi](#alternative-installation-via-pypi)
   - [mender-docker-lifecycle-helper GitHub Actions workflow](#mender-docker-lifecycle-helper-github-actions-workflow)
     - [mender-docker-lifecycle-helper GitHub Actions workflow usage](#mender-docker-lifecycle-helper-github-actions-workflow-usage)
@@ -185,6 +188,12 @@ The CLI flag inputs are as follows:
 | --------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-a`, `--artifact-filename` | `None`                                                                                                        | Name of the artifact file to create. Default: `<manifest-name>-<previous-version>+<current repo commit SHA>+<UUID>.mender`                                                                   |
 | `--cache-dir`               | `${XDG_CACHE_HOME}/mender-docker-lifecycle-helper` if defined, else `~/.cache/mender-docker-lifecycle-helper` | The cache dir to which the metadata for the previously uploaded artifact is saved. Overrides the MENDER_HELPER_CACHE_DIR variable.                                                           |
+| `--cache-limit`             | `True`                                                                                                        | Enable automatic cache cleanup when size limits are exceeded.                                                                                                                                |
+| `--cache-limit-percent`     | `20.0`                                                                                                        | Minimum percent of total disk that should remain free. Takes effect only when `--cache-limit-size` is not set.                                                                               |
+| `--cache-limit-size`        | `None`                                                                                                        | Maximum cache size in bytes. When exceeded, oldest items are removed. Takes precedence over `--cache-limit-percent`.                                                                         |
+| `--clean-cache`             | `False`                                                                                                       | ONLY clean the cache directory (based on `--cache-limit-size` or `--cache-limit-percent`); do not perform any artifact operations.                                                           |
+| `--clear-cache`             | `False`                                                                                                       | Remove the entire cache directory; do not perform any artifact operations.                                                                                                                   |
+| `--clear-image-cache`       | `False`                                                                                                       | Remove all image cache contents (save, extract, delta); do not perform any artifact operations.                                                                                              |
 | `--no-cache`                | `False`                                                                                                       | Skip reading previous artifact info from cache and always read from the repo at the previous version.                                                                                        |
 | `--delta`                   | `True`                                                                                                        | Generate the artifact as an update artifact, if applicable.                                                                                                                                  |
 | `--device-type`             | N/A                                                                                                           | Device type for the artifact (required).                                                                                                                                                     |
@@ -276,6 +285,25 @@ table:
 | The image hash in each `<images>/sums-current.txt` belongs to the services defined in this version of the Compose file | Latest cache state (same as current repo state)                                       | Latest cache state                                                                    | Repo state at [previous version](#mender-artifact-previous-version-conditions)        |
 | The image ref in each `<images>/url-current.txt` belongs to the services defined in this version of the Compose file   | Latest cache state (same as current repo state)                                       | Latest cache state                                                                    | Repo state at [previous version](#mender-artifact-previous-version-conditions)        |
 | `--depends rootfs-image.<repo name><manifest name>.version:` version ID                                                | Cache previous artifact version ID                                                    | Cache previous artifact version ID                                                    | [Previous version](#mender-artifact-previous-version-conditions)                      |
+
+#### mender-docker-lifecycle-helper cache cleaning<a name="mender-docker-lifecycle-helper-cache-cleaning"></a>
+
+The tool provides automatic and manual cache cleanup to manage disk space usage. Cache cleanup can
+be triggered automatically after artifact operations or manually via dedicated flags.
+
+##### Automatic cleanup<a name="automatic-cleanup"></a>
+
+When `--cache-limit` is enabled (default), cleanup runs automatically after artifact
+creation/upload/deployment if cache limits are exceeded. Items are sorted by access time and the
+oldest are removed until the cleanup target is met.
+
+##### Manual cleanup commands<a name="manual-cleanup-commands"></a>
+
+| Command               | Effect                                                                                                            |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `--clean-cache`       | Clean cache by removing oldest items based on configured limits (`--cache-limit-size` or `--cache-limit-percent`) |
+| `--clear-image-cache` | Remove all image cache contents (save, extract, delta directories) without affecting manifests or temp            |
+| `--clear-cache`       | Remove the entire cache directory including manifests and temp                                                    |
 
 #### Alternative installation via PyPi<a name="alternative-installation-via-pypi"></a>
 
