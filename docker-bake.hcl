@@ -8,6 +8,7 @@ group "default" {
 }
 
 target "docker-client" {
+  platforms  = ["linux/amd64", "linux/arm64"]
   dockerfile = "docker-client/Dockerfile"
   contexts = {
     base_context = "docker-image://python:3.12.4"
@@ -27,6 +28,7 @@ target "docker-client" {
 }
 
 target "deps" {
+  platforms  = ["linux/amd64", "linux/arm64"]
   dockerfile = "cwd://Dockerfile"
   contexts = {
     base_context = "target:docker-client"
