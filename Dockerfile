@@ -1,6 +1,8 @@
 # hadolint ignore=DL3006
 FROM base_context
 
+ARG TARGETARCH
+
 # hadolint ignore=SC2034
 RUN DEBIAN_FRONTEND=noninteractive \
     && apt-get update \
@@ -15,7 +17,13 @@ RUN DEBIAN_FRONTEND=noninteractive \
     && rm -rf /var/cache/debconf \
     && rm -rf /var/lib/apt/lists/*
 
-RUN wget -q https://github.com/lework/skopeo-binary/releases/download/v1.22.0/skopeo-linux-amd64 -O /usr/bin/skopeo \
+RUN set -eux; \
+    case "$TARGETARCH" in \
+        amd64) SKOPEO_BIN="skopeo-linux-amd64" ;; \
+        arm64) SKOPEO_BIN="skopeo-linux-arm64" ;; \
+        *) echo "Unsupported architecture: $TARGETARCH" >&2; exit 1 ;; \
+    esac; \
+    wget -q "https://github.com/lework/skopeo-binary/releases/download/v1.22.0/${SKOPEO_BIN}" -O /usr/bin/skopeo \
     && chmod +x /usr/bin/skopeo
 
 COPY <<EOF /etc/containers/policy.json

@@ -1,5 +1,5 @@
 // Expected to be used with https://github.com/rcwbr/dockerfile-partials/blob/main/github-cache-bake.hcl
-// For example, docker buildx bake -f github-cache-bake.hcl -f uv-project/docker-bake.hcl -f cwd://docker-bake.hcl https://github.com/rcwbr/dockerfile-partials.git#0.12.1
+// For example, docker buildx bake -f github-cache-bake.hcl -f uv-project/docker-bake.hcl -f cwd://docker-bake.hcl https://github.com/rcwbr/dockerfile-partials.git#0.17.0
 
 group "default" {
   targets = [
